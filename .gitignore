@@ -30,6 +30,7 @@ pubspec.lock
 # Go binaries
 apps/cli/dingit
 apps/cli/notify
+apps/server/dingit-server
 
 # Config
 .dingit.yaml
