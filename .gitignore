@@ -32,5 +32,8 @@ apps/cli/dingit
 apps/cli/notify
 apps/server/dingit-server
 
+# Claude Code
+.claude/
+
 # Config
 .dingit.yaml
