@@ -2,7 +2,7 @@ name: dingit
 
 packages:
   - packages/**
-  - apps/**
+  - apps/app
 
 scripts:
   analyze:
