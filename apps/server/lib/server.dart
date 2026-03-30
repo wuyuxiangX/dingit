@@ -1,4 +1,4 @@
-library notify_server;
+library dingit_server;
 
 export 'src/handlers/health_handler.dart';
 export 'src/handlers/notification_handler.dart';

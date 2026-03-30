@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:notify_shared/notify_shared.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:dingit_shared/dingit_shared.dart';
 
 import '../../../../app/theme/app_colors.dart';
 
@@ -18,98 +19,113 @@ class ActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actions = notification?.actions ?? [];
+    if (actions.isEmpty && onNext == null) return const SizedBox(height: 80);
 
-    if (actions.isEmpty && onNext == null) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 12),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          // Dynamic action buttons from notification
           for (final action in actions)
-            _ActionButton(
-              label: action.label,
-              icon: _resolveIcon(action.icon),
-              color: _resolveColor(action.colorHex),
-              destructive: action.destructive,
-              onTap: () => onAction?.call(action.value),
+            Expanded(
+              child: _ActionItem(
+                label: action.label,
+                icon: _resolveIcon(action.icon, action.value),
+                destructive: action.destructive,
+                onTap: () => onAction?.call(action.value),
+              ),
             ),
-
-          // Next button (always shown if there are more notifications)
           if (onNext != null)
-            _ActionButton(
-              label: 'Next',
-              icon: Icons.arrow_forward_rounded,
-              color: AppColors.textPrimary,
-              onTap: onNext,
+            Expanded(
+              child: _ActionItem(
+                label: 'Next',
+                icon: LucideIcons.arrowRight,
+                onTap: onNext,
+              ),
             ),
         ],
       ),
     );
   }
 
-  IconData _resolveIcon(String? iconName) {
-    return switch (iconName) {
-      'check' || 'complete' => Icons.check_circle_outline_rounded,
-      'close' || 'reject' => Icons.close_rounded,
-      'snooze' || 'clock' => Icons.access_time_rounded,
-      'approve' => Icons.thumb_up_outlined,
-      'delete' || 'trash' => Icons.delete_outline_rounded,
-      'send' => Icons.send_rounded,
-      'star' => Icons.star_outline_rounded,
-      _ => Icons.radio_button_unchecked_rounded,
-    };
+  IconData _resolveIcon(String? iconName, String value) {
+    final key = iconName ?? value.toLowerCase();
+    return _iconMap[key] ?? LucideIcons.circle;
   }
 
-  Color _resolveColor(String? hex) {
-    if (hex == null || hex.isEmpty) return AppColors.textPrimary;
-    try {
-      final colorValue = int.parse(hex.replaceFirst('#', ''), radix: 16);
-      return Color(0xFF000000 | colorValue);
-    } catch (_) {
-      return AppColors.textPrimary;
-    }
-  }
+  static const _iconMap = <String, IconData>{
+    'check': LucideIcons.checkCircle2,
+    'complete': LucideIcons.checkCircle2,
+    'done': LucideIcons.checkCircle2,
+    'approve': LucideIcons.checkCircle2,
+    'confirm': LucideIcons.checkCircle2,
+    'reject': LucideIcons.xCircle,
+    'close': LucideIcons.xCircle,
+    'cancel': LucideIcons.xCircle,
+    'snooze': LucideIcons.clock3,
+    'clock': LucideIcons.clock3,
+    'later': LucideIcons.clock3,
+    'delete': LucideIcons.trash2,
+    'trash': LucideIcons.trash2,
+    'review': LucideIcons.eye,
+    'skip': LucideIcons.skipForward,
+    'prioritize': LucideIcons.arrowUp,
+    'backlog': LucideIcons.archive,
+    'send': LucideIcons.send,
+    'star': LucideIcons.star,
+  };
 }
 
-class _ActionButton extends StatelessWidget {
+class _ActionItem extends StatefulWidget {
   final String label;
   final IconData icon;
-  final Color color;
   final bool destructive;
   final VoidCallback? onTap;
 
-  const _ActionButton({
+  const _ActionItem({
     required this.label,
     required this.icon,
-    required this.color,
     this.destructive = false,
     this.onTap,
   });
 
   @override
+  State<_ActionItem> createState() => _ActionItemState();
+}
+
+class _ActionItemState extends State<_ActionItem> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    final effectiveColor = destructive ? AppColors.error : color;
+    final color = widget.destructive ? AppColors.destructive : AppColors.inkMuted;
 
     return GestureDetector(
-      onTap: onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap?.call();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
       behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 28, color: effectiveColor),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: effectiveColor,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-        ],
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 80),
+        opacity: _pressed ? 0.35 : 1.0,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(widget.icon, size: 24, color: color),
+            const SizedBox(height: 6),
+            Text(
+              widget.label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.1,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }

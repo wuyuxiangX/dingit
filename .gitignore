@@ -27,5 +27,9 @@ pubspec.lock
 # Generated
 *.mocks.dart
 
+# Go binaries
+apps/cli/dingit
+apps/cli/notify
+
 # Config
-.notify-hub.yaml
+.dingit.yaml

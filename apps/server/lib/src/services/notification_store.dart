@@ -1,4 +1,4 @@
-import 'package:notify_shared/notify_shared.dart';
+import 'package:dingit_shared/dingit_shared.dart';
 import 'package:uuid/uuid.dart';
 
 class NotificationStore {

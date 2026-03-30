@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:notify_shared/notify_shared.dart';
+import 'package:dingit_shared/dingit_shared.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'notification_store.dart';

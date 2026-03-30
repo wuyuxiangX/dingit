@@ -1,4 +1,4 @@
-name: notify_hub
+name: dingit
 
 packages:
   - packages/**

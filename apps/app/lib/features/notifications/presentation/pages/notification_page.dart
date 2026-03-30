@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/websocket/ws_client.dart';
@@ -18,7 +19,6 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
   @override
   void initState() {
     super.initState();
-    // Connect WebSocket after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(wsClientProvider).connect();
     });
@@ -30,44 +30,43 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
     final topNotification = pending.isNotEmpty ? pending.first : null;
 
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.menu_rounded),
-          onPressed: () {},
-        ),
-        title: Column(
+      body: SafeArea(
+        child: Column(
           children: [
-            const Text('Notifications'),
-            _ConnectionStatus(),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () {
-              // Reconnect WebSocket to resync
-              ref.read(wsClientProvider).disconnect();
-              ref.read(wsClientProvider).connect();
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Card count
-          if (pending.isNotEmpty)
+            // Header
             Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                '${pending.length} pending',
-                style: Theme.of(context).textTheme.bodyMedium,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.menu, size: 20, color: AppColors.ink),
+                  const Spacer(),
+                  // Center title
+                  Column(
+                    children: [
+                      Text(
+                        'Dingit',
+                        style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 22),
+                      ),
+                      const SizedBox(height: 2),
+                      _ConnectionStatus(),
+                    ],
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () {
+                      ref.read(wsClientProvider).disconnect();
+                      ref.read(wsClientProvider).connect();
+                    },
+                    child: Icon(LucideIcons.refreshCw, size: 18, color: AppColors.ink),
+                  ),
+                ],
               ),
             ),
 
-          // Card stack
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
+            const SizedBox(height: 16),
+
+            // Card stack — fills all available space
+            Expanded(
               child: CardStack(
                 notifications: pending,
                 onAction: (notification, action) {
@@ -82,18 +81,15 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
                 },
               ),
             ),
-          ),
 
-          // Action bar
-          SafeArea(
-            child: ActionBar(
+            // Action bar
+            ActionBar(
               notification: topNotification,
               onAction: topNotification != null
                   ? (actionValue) {
                       ref
                           .read(notificationsProvider.notifier)
-                          .respondToNotification(
-                              topNotification.id, actionValue);
+                          .respondToNotification(topNotification.id, actionValue);
                     }
                   : null,
               onNext: pending.length > 1
@@ -104,8 +100,8 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
                     }
                   : null,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -119,31 +115,22 @@ class _ConnectionStatus extends ConsumerWidget {
     return ValueListenableBuilder<WsConnectionState>(
       valueListenable: stateNotifier,
       builder: (context, state, _) {
-        final (color, text) = switch (state) {
-          WsConnectionState.connected => (AppColors.success, 'Connected'),
+        final (color, label) = switch (state) {
+          WsConnectionState.connected => (AppColors.success, 'Updated now'),
           WsConnectionState.connecting => (AppColors.warning, 'Connecting...'),
-          WsConnectionState.disconnected => (AppColors.error, 'Disconnected'),
+          WsConnectionState.disconnected => (AppColors.destructive, 'Disconnected'),
         };
 
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
+              width: 5,
+              height: 5,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
             const SizedBox(width: 4),
-            Text(
-              text,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontSize: 10,
-                    color: AppColors.textSecondary,
-                  ),
-            ),
+            Text(label, style: Theme.of(context).textTheme.labelSmall),
           ],
         );
       },

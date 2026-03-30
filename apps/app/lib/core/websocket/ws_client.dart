@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:notify_shared/notify_shared.dart';
+import 'package:dingit_shared/dingit_shared.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 enum WsConnectionState { disconnected, connecting, connected }

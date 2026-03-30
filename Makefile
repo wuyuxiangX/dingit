@@ -5,7 +5,7 @@ setup:
 	melos bootstrap
 
 codegen:
-	cd packages/notify_shared && dart run build_runner build --delete-conflicting-outputs
+	cd packages/dingit_shared && dart run build_runner build --delete-conflicting-outputs
 
 dev-server:
 	cd apps/server && dart run bin/server.dart

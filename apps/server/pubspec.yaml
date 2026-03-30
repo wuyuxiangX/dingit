@@ -1,5 +1,5 @@
-name: notify_server
-description: Notify Hub relay server
+name: dingit_server
+description: Dingit relay server
 version: 0.1.0
 publish_to: none
 
@@ -12,8 +12,8 @@ dependencies:
   shelf_web_socket: ^3.0.0
   uuid: ^4.5.1
   http: ^1.2.0
-  notify_shared:
-    path: ../../packages/notify_shared
+  dingit_shared:
+    path: ../../packages/dingit_shared
 
 dev_dependencies:
   test: ^1.25.0

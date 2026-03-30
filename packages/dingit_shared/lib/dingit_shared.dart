@@ -1,4 +1,4 @@
-library notify_shared;
+library dingit_shared;
 
 export 'src/models/notification_action.dart';
 export 'src/models/notification_status.dart';

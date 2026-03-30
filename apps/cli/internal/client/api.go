@@ -1,0 +1,129 @@
+package client
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+)
+
+type Client struct {
+	BaseURL    string
+	httpClient *http.Client
+}
+
+func New(baseURL string) *Client {
+	return &Client{
+		BaseURL:    baseURL,
+		httpClient: &http.Client{},
+	}
+}
+
+type SendRequest struct {
+	Title       string                   `json:"title"`
+	Body        string                   `json:"body"`
+	Source      string                   `json:"source"`
+	Actions     []map[string]interface{} `json:"actions,omitempty"`
+	CallbackURL string                   `json:"callback_url,omitempty"`
+	Metadata    map[string]interface{}   `json:"metadata,omitempty"`
+}
+
+type SendResponse struct {
+	ID        string `json:"id"`
+	Status    string `json:"status"`
+	Timestamp string `json:"timestamp"`
+}
+
+func (c *Client) Send(req *SendRequest) (*SendResponse, error) {
+	body, _ := json.Marshal(req)
+	resp, err := c.httpClient.Post(
+		c.BaseURL+"/api/notifications",
+		"application/json",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("connection failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 201 {
+		return nil, fmt.Errorf("server error (%d): %s", resp.StatusCode, string(data))
+	}
+
+	var result SendResponse
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) List(status string, limit int) ([]map[string]interface{}, int, error) {
+	u, _ := url.Parse(c.BaseURL + "/api/notifications")
+	q := u.Query()
+	if status != "" {
+		q.Set("status", status)
+	}
+	q.Set("limit", fmt.Sprintf("%d", limit))
+	u.RawQuery = q.Encode()
+
+	resp, err := c.httpClient.Get(u.String())
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return nil, 0, fmt.Errorf("server error (%d): %s", resp.StatusCode, string(data))
+	}
+
+	var result struct {
+		Notifications []map[string]interface{} `json:"notifications"`
+		Total         int                      `json:"total"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, 0, err
+	}
+	return result.Notifications, result.Total, nil
+}
+
+func (c *Client) Get(id string) (map[string]interface{}, error) {
+	resp, err := c.httpClient.Get(c.BaseURL + "/api/notifications/" + id)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("not found (%d): %s", resp.StatusCode, string(data))
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (c *Client) Health() (map[string]interface{}, error) {
+	resp, err := c.httpClient.Get(c.BaseURL + "/health")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("server error (%d): %s", resp.StatusCode, string(data))
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}

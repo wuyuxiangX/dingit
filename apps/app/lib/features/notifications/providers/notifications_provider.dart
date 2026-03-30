@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:notify_shared/notify_shared.dart';
+import 'package:dingit_shared/dingit_shared.dart';
 
 import '../../../core/env/env_config.dart';
 import '../../../core/websocket/ws_client.dart';

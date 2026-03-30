@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:notify_shared/notify_shared.dart';
+import 'package:dingit_shared/dingit_shared.dart';
 
 class CallbackService {
   final http.Client _httpClient;

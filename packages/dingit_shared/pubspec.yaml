@@ -1,5 +1,5 @@
-name: notify_shared
-description: Shared models and protocol for Notify Hub
+name: dingit_shared
+description: Shared models and protocol for Dingit
 version: 0.1.0
 publish_to: none
 
