@@ -1,0 +1,20 @@
+name: notify_server
+description: Notify Hub relay server
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  shelf: ^1.4.0
+  shelf_router: ^1.1.0
+  shelf_web_socket: ^3.0.0
+  uuid: ^4.5.1
+  http: ^1.2.0
+  notify_shared:
+    path: ../../packages/notify_shared
+
+dev_dependencies:
+  test: ^1.25.0
+  lints: ^5.1.0
