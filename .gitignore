@@ -1,0 +1,31 @@
+# Dart/Flutter
+.dart_tool/
+.packages
+build/
+pubspec.lock
+*.g.dart
+*.freezed.dart
+
+# Flutter
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+*.dSYM/
+
+# Melos
+.melos/
+
+# Generated
+*.mocks.dart
+
+# Config
+.notify-hub.yaml

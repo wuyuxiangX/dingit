@@ -1,0 +1,23 @@
+name: notify_hub
+
+packages:
+  - packages/**
+  - apps/**
+
+scripts:
+  analyze:
+    run: dart analyze .
+    exec:
+      concurrency: 3
+  format:
+    run: dart format .
+    exec:
+      concurrency: 3
+  test:
+    run: dart test
+    exec:
+      concurrency: 1
+  codegen:
+    run: dart run build_runner build --delete-conflicting-outputs
+    packageFilters:
+      dependsOn: build_runner
