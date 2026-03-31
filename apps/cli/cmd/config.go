@@ -16,6 +16,7 @@ var configCmd = &cobra.Command{
 func init() {
 	configCmd.Flags().String("set-server", "", "Set server URL")
 	configCmd.Flags().String("set-source", "", "Set default source name")
+	configCmd.Flags().String("set-api-key", "", "Set API key")
 	configCmd.Flags().Bool("show", false, "Show current config")
 
 	rootCmd.AddCommand(configCmd)
@@ -29,14 +30,24 @@ func runConfig(cmd *cobra.Command, args []string) error {
 		fmt.Println("Current config:")
 		fmt.Printf("  server_url:     %s\n", cfg.ServerURL)
 		fmt.Printf("  default_source: %s\n", cfg.DefaultSource)
+		if cfg.APIKey != "" {
+			display := cfg.APIKey
+			if len(display) > 15 {
+				display = display[:15]
+			}
+			fmt.Printf("  api_key:        %s...\n", display)
+		} else {
+			fmt.Printf("  api_key:        (not set)\n")
+		}
 		return nil
 	}
 
 	server, _ := cmd.Flags().GetString("set-server")
 	source, _ := cmd.Flags().GetString("set-source")
+	apiKey, _ := cmd.Flags().GetString("set-api-key")
 
-	if server == "" && source == "" {
-		fmt.Println("Use --set-server or --set-source to set config, or --show to view.")
+	if server == "" && source == "" && apiKey == "" {
+		fmt.Println("Use --set-server, --set-source, or --set-api-key to set config, or --show to view.")
 		return nil
 	}
 
@@ -45,6 +56,9 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	}
 	if source != "" {
 		cfg.DefaultSource = source
+	}
+	if apiKey != "" {
+		cfg.APIKey = apiKey
 	}
 
 	if err := cfg.Save(); err != nil {

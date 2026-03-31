@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dingit-me/cli/internal/client"
-	"github.com/dingit-me/cli/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -23,16 +21,10 @@ func init() {
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	cfg := config.Load()
-	base := cfg.ServerURL
-	if serverURL != "" {
-		base = serverURL
-	}
-
 	status, _ := cmd.Flags().GetString("status")
 	limit, _ := cmd.Flags().GetInt("limit")
 
-	c := client.New(base)
+	c := newClient()
 	notifications, total, err := c.List(status, limit)
 	if err != nil {
 		return err

@@ -9,6 +9,7 @@ import (
 type Config struct {
 	Port        int
 	DatabaseURL string
+	APIKey      string
 }
 
 func Load() (*Config, error) {
@@ -26,8 +27,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
 
+	apiKey := os.Getenv("DINGIT_API_KEY")
+
 	return &Config{
 		Port:        port,
 		DatabaseURL: dbURL,
+		APIKey:      apiKey,
 	}, nil
 }

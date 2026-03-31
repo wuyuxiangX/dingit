@@ -35,10 +35,6 @@ func init() {
 
 func runSend(cmd *cobra.Command, args []string) error {
 	cfg := config.Load()
-	base := cfg.ServerURL
-	if serverURL != "" {
-		base = serverURL
-	}
 
 	title, _ := cmd.Flags().GetString("title")
 	body, _ := cmd.Flags().GetString("body")
@@ -66,7 +62,7 @@ func runSend(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	c := client.New(base)
+	c := newClient()
 	result, err := c.Send(&client.SendRequest{
 		Title:       title,
 		Body:        body,

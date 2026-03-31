@@ -45,6 +45,15 @@ func migrate(ctx context.Context, pool *pgxpool.Pool) error {
 
 	CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status);
 	CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
+
+	CREATE TABLE IF NOT EXISTS api_keys (
+		id           TEXT PRIMARY KEY,
+		name         TEXT NOT NULL DEFAULT '',
+		key_hash     TEXT NOT NULL UNIQUE,
+		prefix       TEXT NOT NULL DEFAULT '',
+		created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		last_used_at TIMESTAMPTZ
+	);
 	`
 
 	_, err := pool.Exec(ctx, query)
