@@ -137,5 +137,16 @@ func (c *Client) doRequest(method, url string, body io.Reader) (*http.Response, 
 	if c.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.APIKey)
 	}
-	return c.httpClient.Do(req)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		resp.Body.Close()
+		if c.APIKey == "" {
+			return nil, fmt.Errorf("authentication required: no API key configured\n\n  Set your key:  dingit config --set-api-key <key>\n  Or export:     DINGIT_API_KEY=<key>")
+		}
+		return nil, fmt.Errorf("authentication failed: invalid API key")
+	}
+	return resp, nil
 }
