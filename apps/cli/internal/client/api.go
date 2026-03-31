@@ -11,12 +11,14 @@ import (
 
 type Client struct {
 	BaseURL    string
+	APIKey     string
 	httpClient *http.Client
 }
 
-func New(baseURL string) *Client {
+func New(baseURL, apiKey string) *Client {
 	return &Client{
 		BaseURL:    baseURL,
+		APIKey:     apiKey,
 		httpClient: &http.Client{},
 	}
 }
@@ -38,11 +40,7 @@ type SendResponse struct {
 
 func (c *Client) Send(req *SendRequest) (*SendResponse, error) {
 	body, _ := json.Marshal(req)
-	resp, err := c.httpClient.Post(
-		c.BaseURL+"/api/notifications",
-		"application/json",
-		bytes.NewReader(body),
-	)
+	resp, err := c.doRequest("POST", c.BaseURL+"/api/notifications", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("connection failed: %w", err)
 	}
@@ -69,7 +67,7 @@ func (c *Client) List(status string, limit int) ([]map[string]interface{}, int, 
 	q.Set("limit", fmt.Sprintf("%d", limit))
 	u.RawQuery = q.Encode()
 
-	resp, err := c.httpClient.Get(u.String())
+	resp, err := c.doRequest("GET", u.String(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -91,7 +89,7 @@ func (c *Client) List(status string, limit int) ([]map[string]interface{}, int, 
 }
 
 func (c *Client) Get(id string) (map[string]interface{}, error) {
-	resp, err := c.httpClient.Get(c.BaseURL + "/api/notifications/" + id)
+	resp, err := c.doRequest("GET", c.BaseURL+"/api/notifications/"+id, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -126,4 +124,18 @@ func (c *Client) Health() (map[string]interface{}, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+func (c *Client) doRequest(method, url string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if c.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	}
+	return c.httpClient.Do(req)
 }

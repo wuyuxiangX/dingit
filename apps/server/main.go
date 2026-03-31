@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,12 +16,22 @@ import (
 	"github.com/dingit-me/server/internal/config"
 	"github.com/dingit-me/server/internal/db"
 	"github.com/dingit-me/server/internal/handler"
+	"github.com/dingit-me/server/internal/middleware"
 	"github.com/dingit-me/server/internal/model"
 	"github.com/dingit-me/server/internal/service"
 	"github.com/dingit-me/server/internal/ws"
 )
 
 func main() {
+	// CLI flags
+	generateKey := flag.Bool("generate-key", false, "Generate a new API key and exit")
+	flag.Parse()
+
+	if *generateKey {
+		fmt.Println(service.GenerateAPIKey())
+		os.Exit(0)
+	}
+
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -39,6 +50,29 @@ func main() {
 	// Services
 	store := service.NewStore(pool)
 	callbackSvc := service.NewCallbackService()
+	apiKeySvc := service.NewAPIKeyService(pool)
+
+	// Seed API key from env if provided
+	if err := apiKeySvc.SeedFromEnv(ctx, cfg.APIKey); err != nil {
+		log.Fatalf("Failed to seed API key: %v", err)
+	}
+
+	// Auto-generate key on first startup if none exist
+	keyCount, err := apiKeySvc.Count(ctx)
+	if err != nil {
+		log.Fatalf("Failed to count API keys: %v", err)
+	}
+	if keyCount == 0 {
+		rawKey := service.GenerateAPIKey()
+		if _, err := apiKeySvc.Create(ctx, "auto-generated", rawKey); err != nil {
+			log.Fatalf("Failed to save API key: %v", err)
+		}
+		log.Println("================================================")
+		log.Println("  No API keys found. Generated initial key:")
+		log.Printf("  %s", rawKey)
+		log.Println("  Save this key — it will not be shown again.")
+		log.Println("================================================")
+	}
 
 	// WebSocket Hub (use pointer so the closure can reference it)
 	var hub *ws.Hub
@@ -74,13 +108,19 @@ func main() {
 	r.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 		c.Next()
 	})
+
+	// API Key auth middleware
+	r.Use(middleware.APIKeyAuth(apiKeySvc, map[string]bool{
+		"/health": true,
+		"/ws":     true,
+	}))
 
 	// Routes
 	r.GET("/health", healthHandler.Health)
