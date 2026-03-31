@@ -33,7 +33,7 @@ apps/cli/notify
 apps/server/dingit-server
 
 # Claude Code
-.claude/
+.claude/linear*
 
 # Config
 .dingit.yaml

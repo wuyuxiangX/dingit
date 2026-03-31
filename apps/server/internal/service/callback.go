@@ -3,12 +3,14 @@ package service
 import (
 	"bytes"
 	"encoding/json"
-	"log"
 	"math"
 	"net/http"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/dingit-me/server/internal/model"
+	"github.com/dingit-me/server/internal/pkg/logger"
 )
 
 type CallbackService struct {
@@ -40,7 +42,7 @@ func (s *CallbackService) deliverWithRetry(url string, notification *model.Notif
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("[Callback] marshal error: %v", err)
+		logger.Error("Callback marshal error", zap.Error(err))
 		return
 	}
 
@@ -50,12 +52,12 @@ func (s *CallbackService) deliverWithRetry(url string, notification *model.Notif
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-				log.Printf("[Callback] Delivered to %s (%d)", url, resp.StatusCode)
+				logger.Info("Callback delivered", zap.String("url", url), zap.Int("status", resp.StatusCode))
 				return
 			}
-			log.Printf("[Callback] Failed attempt %d: %d", attempt+1, resp.StatusCode)
+			logger.Warn("Callback failed", zap.String("url", url), zap.Int("attempt", attempt+1), zap.Int("status", resp.StatusCode))
 		} else {
-			log.Printf("[Callback] Error attempt %d: %v", attempt+1, err)
+			logger.Warn("Callback error", zap.String("url", url), zap.Int("attempt", attempt+1), zap.Error(err))
 		}
 
 		if attempt < maxRetries-1 {
@@ -64,5 +66,5 @@ func (s *CallbackService) deliverWithRetry(url string, notification *model.Notif
 		}
 	}
 
-	log.Printf("[Callback] All retries exhausted for %s", url)
+	logger.Error("Callback retries exhausted", zap.String("url", url))
 }

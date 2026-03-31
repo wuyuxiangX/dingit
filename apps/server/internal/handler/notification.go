@@ -1,23 +1,23 @@
 package handler
 
 import (
-	"net/http"
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 
 	"github.com/dingit-me/server/internal/model"
+	"github.com/dingit-me/server/internal/pkg/pagination"
+	"github.com/dingit-me/server/internal/pkg/response"
 	"github.com/dingit-me/server/internal/service"
 	"github.com/dingit-me/server/internal/ws"
 )
 
 type NotificationHandler struct {
-	store *service.Store
-	hub   *ws.Hub
+	store       *service.Store
+	hub         *ws.Hub
+	callbackSvc *service.CallbackService
 }
 
-func NewNotificationHandler(store *service.Store, hub *ws.Hub) *NotificationHandler {
-	return &NotificationHandler{store: store, hub: hub}
+func NewNotificationHandler(store *service.Store, hub *ws.Hub, callbackSvc *service.CallbackService) *NotificationHandler {
+	return &NotificationHandler{store: store, hub: hub, callbackSvc: callbackSvc}
 }
 
 type createRequest struct {
@@ -32,7 +32,7 @@ type createRequest struct {
 func (h *NotificationHandler) Create(c *gin.Context) {
 	var req createRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "title and body are required"})
+		response.BadRequest(c, response.CodeBadRequest, "title and body are required")
 		return
 	}
 
@@ -52,13 +52,13 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 
 	created, err := h.store.Add(c.Request.Context(), n)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalError(c, "Failed to create notification")
 		return
 	}
 
 	h.hub.Broadcast(model.NewNotificationNewMsg(created))
 
-	c.JSON(http.StatusCreated, gin.H{
+	response.Created(c, gin.H{
 		"id":        created.ID,
 		"status":    created.Status,
 		"timestamp": created.Timestamp,
@@ -68,27 +68,33 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 func (h *NotificationHandler) List(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	var p pagination.Params
+	_ = c.ShouldBindQuery(&p)
+	page, pageSize, offset := p.Normalize()
 
 	var status *model.NotificationStatus
 	if s := c.Query("status"); s != "" {
 		st := model.NotificationStatus(s)
+		if !isValidStatus(st) {
+			response.BadRequest(c, response.CodeInvalidStatus, "Invalid status filter")
+			return
+		}
 		status = &st
 	}
 
-	notifications, err := h.store.List(ctx, status, limit, offset)
+	notifications, err := h.store.List(ctx, status, pageSize, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalError(c, "Failed to list notifications")
 		return
 	}
 
-	total, _ := h.store.Count(ctx, status)
+	total, err := h.store.Count(ctx, status)
+	if err != nil {
+		response.InternalError(c, "Failed to count notifications")
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"notifications": notifications,
-		"total":         total,
-	})
+	response.Success(c, pagination.NewResult(notifications, int64(total), page, pageSize))
 }
 
 func (h *NotificationHandler) GetByID(c *gin.Context) {
@@ -96,13 +102,86 @@ func (h *NotificationHandler) GetByID(c *gin.Context) {
 
 	n, err := h.store.Get(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalError(c, "Failed to get notification")
 		return
 	}
 	if n == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		response.NotFound(c, "Notification not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, n)
+	response.Success(c, n)
+}
+
+type updateRequest struct {
+	Status        *model.NotificationStatus `json:"status"`
+	ActionedValue *string                   `json:"actioned_value"`
+}
+
+func (h *NotificationHandler) Update(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	var req updateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, response.CodeBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.Status == nil {
+		response.BadRequest(c, response.CodeBadRequest, "status is required")
+		return
+	}
+
+	if !isValidStatus(*req.Status) {
+		response.BadRequest(c, response.CodeInvalidStatus, "Invalid status value")
+		return
+	}
+
+	updated, err := h.store.UpdateStatus(ctx, id, *req.Status, req.ActionedValue)
+	if err != nil {
+		response.InternalError(c, "Failed to update notification")
+		return
+	}
+	if updated == nil {
+		response.NotFound(c, "Notification not found")
+		return
+	}
+
+	h.hub.Broadcast(model.NewNotificationUpdatedMsg(updated))
+
+	if *req.Status == model.StatusActioned && updated.CallbackURL != nil && req.ActionedValue != nil {
+		h.callbackSvc.Deliver(updated, &model.ActionResponse{
+			NotificationID: id,
+			Action:         *req.ActionedValue,
+		})
+	}
+
+	response.Success(c, updated)
+}
+
+func (h *NotificationHandler) Delete(c *gin.Context) {
+	id := c.Param("id")
+
+	deleted, err := h.store.Delete(c.Request.Context(), id)
+	if err != nil {
+		response.InternalError(c, "Failed to delete notification")
+		return
+	}
+	if !deleted {
+		response.NotFound(c, "Notification not found")
+		return
+	}
+
+	h.hub.Broadcast(model.NewNotificationDeletedMsg(id))
+
+	response.NoContent(c)
+}
+
+func isValidStatus(s model.NotificationStatus) bool {
+	switch s {
+	case model.StatusPending, model.StatusActioned, model.StatusDismissed, model.StatusExpired:
+		return true
+	}
+	return false
 }

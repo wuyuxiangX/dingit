@@ -2,25 +2,26 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
 
 	"github.com/dingit-me/server/internal/model"
+	"github.com/dingit-me/server/internal/pkg/logger"
 )
 
 type ActionHandler func(response *model.ActionResponse)
 
 type Hub struct {
-	mu              sync.RWMutex
-	clients         map[*websocket.Conn]struct{}
+	mu               sync.RWMutex
+	clients          map[*websocket.Conn]struct{}
 	onActionResponse ActionHandler
 }
 
 func NewHub(onActionResponse ActionHandler) *Hub {
 	return &Hub{
-		clients:         make(map[*websocket.Conn]struct{}),
+		clients:          make(map[*websocket.Conn]struct{}),
 		onActionResponse: onActionResponse,
 	}
 }
@@ -36,17 +37,15 @@ func (h *Hub) AddClient(conn *websocket.Conn, syncMessages []model.Notification)
 	h.clients[conn] = struct{}{}
 	h.mu.Unlock()
 
-	// Send full sync
 	h.sendTo(conn, model.NewSyncFullMsg(syncMessages))
 
-	// Start reading in background
 	go h.readPump(conn)
 }
 
 func (h *Hub) Broadcast(msg model.WsMessage) {
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("[WsHub] marshal error: %v", err)
+		logger.Error("WsHub marshal error", zap.Error(err))
 		return
 	}
 
@@ -90,7 +89,7 @@ func (h *Hub) readPump(conn *websocket.Conn) {
 
 		msg, err := model.ParseWsMessage(data)
 		if err != nil {
-			log.Printf("[WsHub] parse error: %v", err)
+			logger.Warn("WsHub parse error", zap.Error(err))
 			continue
 		}
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,12 +11,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"github.com/dingit-me/server/internal/config"
 	"github.com/dingit-me/server/internal/db"
 	"github.com/dingit-me/server/internal/handler"
 	"github.com/dingit-me/server/internal/middleware"
 	"github.com/dingit-me/server/internal/model"
+	"github.com/dingit-me/server/internal/pkg/logger"
 	"github.com/dingit-me/server/internal/service"
 	"github.com/dingit-me/server/internal/ws"
 )
@@ -35,17 +36,27 @@ func main() {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Initialize structured logger
+	logger.Init(logger.Config(cfg.Logger))
+	defer logger.Sync()
+
+	// Gin mode
+	if cfg.IsProduction() {
+		gin.SetMode(gin.ReleaseMode)
 	}
 
 	// Connect to PostgreSQL
 	ctx := context.Background()
-	pool, err := db.Connect(ctx, cfg.DatabaseURL)
+	pool, err := db.Connect(ctx, cfg.Database.URL)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		logger.Fatal("Failed to connect to database", zap.Error(err))
 	}
 	defer pool.Close()
-	log.Println("[DB] Connected to PostgreSQL")
+	logger.Info("Connected to PostgreSQL")
 
 	// Services
 	store := service.NewStore(pool)
@@ -54,34 +65,39 @@ func main() {
 
 	// Seed API key from env if provided
 	if err := apiKeySvc.SeedFromEnv(ctx, cfg.APIKey); err != nil {
-		log.Fatalf("Failed to seed API key: %v", err)
+		logger.Fatal("Failed to seed API key", zap.Error(err))
 	}
 
 	// Auto-generate key on first startup if none exist
 	keyCount, err := apiKeySvc.Count(ctx)
 	if err != nil {
-		log.Fatalf("Failed to count API keys: %v", err)
+		logger.Fatal("Failed to count API keys", zap.Error(err))
 	}
 	if keyCount == 0 {
 		rawKey := service.GenerateAPIKey()
 		if _, err := apiKeySvc.Create(ctx, "auto-generated", rawKey); err != nil {
-			log.Fatalf("Failed to save API key: %v", err)
+			logger.Fatal("Failed to save API key", zap.Error(err))
 		}
-		log.Println("================================================")
-		log.Println("  No API keys found. Generated initial key:")
-		log.Printf("  %s", rawKey)
-		log.Println("  Save this key — it will not be shown again.")
-		log.Println("================================================")
+		logger.Info("No API keys found. Generated initial key",
+			zap.String("key", rawKey),
+		)
+		logger.Warn("Save this key — it will not be shown again")
 	}
 
-	// WebSocket Hub (use pointer so the closure can reference it)
+	// WebSocket Hub
 	var hub *ws.Hub
 	hub = ws.NewHub(func(response *model.ActionResponse) {
-		log.Printf("[Server] Action response: %s -> %s", response.NotificationID, response.Action)
+		logger.Info("Action response",
+			zap.String("notification_id", response.NotificationID),
+			zap.String("action", response.Action),
+		)
 
-		updated, err := store.UpdateStatus(ctx, response.NotificationID, model.StatusActioned, &response.Action)
+		opCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		updated, err := store.UpdateStatus(opCtx, response.NotificationID, model.StatusActioned, &response.Action)
 		if err != nil {
-			log.Printf("[Server] Failed to update status: %v", err)
+			logger.Error("Failed to update status", zap.Error(err))
 			return
 		}
 		if updated == nil {
@@ -97,24 +113,18 @@ func main() {
 	defer hub.Close()
 
 	// Handlers
-	notificationHandler := handler.NewNotificationHandler(store, hub)
+	notificationHandler := handler.NewNotificationHandler(store, hub, callbackSvc)
 	healthHandler := handler.NewHealthHandler(store, hub)
 	wsHandler := handler.NewWsHandler(store, hub)
 
 	// Router
-	r := gin.Default()
+	r := gin.New()
 
-	// CORS
-	r.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-		c.Next()
-	})
+	// Global middleware chain (order matters)
+	r.Use(middleware.Recovery())
+	r.Use(middleware.SecurityHeaders())
+	r.Use(middleware.CORS(cfg.CORS))
+	r.Use(middleware.RequestLog())
 
 	// API Key auth middleware
 	r.Use(middleware.APIKeyAuth(apiKeySvc, map[string]bool{
@@ -131,22 +141,26 @@ func main() {
 		api.POST("/notifications", notificationHandler.Create)
 		api.GET("/notifications", notificationHandler.List)
 		api.GET("/notifications/:id", notificationHandler.GetByID)
+		api.PATCH("/notifications/:id", notificationHandler.Update)
+		api.DELETE("/notifications/:id", notificationHandler.Delete)
 	}
 
-	// Server with graceful shutdown
-	addr := fmt.Sprintf(":%d", cfg.Port)
+	// Server with timeouts and graceful shutdown
+	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{
-		Addr:    addr,
-		Handler: r,
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	go func() {
-		log.Printf("🚀 Dingit Server running on http://localhost:%d", cfg.Port)
-		log.Printf("   REST API: http://localhost:%d/api/notifications", cfg.Port)
-		log.Printf("   WebSocket: ws://localhost:%d/ws", cfg.Port)
-		log.Printf("   Health: http://localhost:%d/health", cfg.Port)
+		logger.Info("Dingit Server started",
+			zap.String("addr", addr),
+			zap.String("env", cfg.App.Env),
+		)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+			logger.Fatal("Server error", zap.Error(err))
 		}
 	}()
 
@@ -155,12 +169,12 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	logger.Info("Shutting down server...")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		logger.Fatal("Server forced to shutdown", zap.Error(err))
 	}
-	log.Println("Server stopped")
+	logger.Info("Server stopped")
 }

@@ -1,13 +1,14 @@
 package handler
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
 
 	"github.com/dingit-me/server/internal/model"
+	"github.com/dingit-me/server/internal/pkg/logger"
 	"github.com/dingit-me/server/internal/service"
 	"github.com/dingit-me/server/internal/ws"
 )
@@ -28,17 +29,16 @@ func NewWsHandler(store *service.Store, hub *ws.Hub) *WsHandler {
 func (h *WsHandler) Handle(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("[WS] upgrade error: %v", err)
+		logger.Error("WebSocket upgrade error", zap.Error(err))
 		return
 	}
 
-	log.Println("[Server] New WebSocket client connected")
+	logger.Info("New WebSocket client connected", zap.String("ip", c.ClientIP()))
 
-	// Get pending notifications for sync
 	pending := model.StatusPending
 	notifications, err := h.store.List(c.Request.Context(), &pending, 1000, 0)
 	if err != nil {
-		log.Printf("[WS] failed to load pending: %v", err)
+		logger.Error("Failed to load pending notifications", zap.Error(err))
 		notifications = []model.Notification{}
 	}
 
