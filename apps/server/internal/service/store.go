@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,7 +14,7 @@ import (
 	"github.com/dingit-me/server/internal/model"
 )
 
-const notificationColumns = `id, title, body, source, status, actions, callback_url, metadata, actioned_value, created_at, actioned_at, expires_at`
+const notificationColumns = `id, title, body, source, status, priority, actions, callback_url, metadata, actioned_value, created_at, actioned_at, expires_at`
 
 type Store struct {
 	pool *pgxpool.Pool
@@ -27,6 +28,9 @@ func (s *Store) Add(ctx context.Context, n *model.Notification) (*model.Notifica
 	n.ID = fmt.Sprintf("ntf_%s", uuid.New().String()[:8])
 	n.Timestamp = time.Now().UTC()
 	n.Status = model.StatusPending
+	if n.Priority == "" {
+		n.Priority = model.PriorityNormal
+	}
 
 	if n.Actions == nil {
 		n.Actions = []model.NotificationAction{}
@@ -46,9 +50,9 @@ func (s *Store) Add(ctx context.Context, n *model.Notification) (*model.Notifica
 	}
 
 	_, err = s.pool.Exec(ctx, `
-		INSERT INTO notifications (id, title, body, source, status, actions, callback_url, metadata, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	`, n.ID, n.Title, n.Body, n.Source, n.Status, actionsJSON, n.CallbackURL, metadataJSON, n.Timestamp)
+		INSERT INTO notifications (id, title, body, source, status, priority, actions, callback_url, metadata, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	`, n.ID, n.Title, n.Body, n.Source, n.Status, n.Priority, actionsJSON, n.CallbackURL, metadataJSON, n.Timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("insert notification: %w", err)
 	}
@@ -60,19 +64,29 @@ func (s *Store) Get(ctx context.Context, id string) (*model.Notification, error)
 	return s.scanOne(ctx, `SELECT `+notificationColumns+` FROM notifications WHERE id = $1`, id)
 }
 
-func (s *Store) List(ctx context.Context, status *model.NotificationStatus, limit, offset int) ([]model.Notification, error) {
-	var rows pgx.Rows
-	var err error
+func (s *Store) List(ctx context.Context, status *model.NotificationStatus, priority *model.NotificationPriority, limit, offset int) ([]model.Notification, error) {
+	query := `SELECT ` + notificationColumns + ` FROM notifications`
+	var conditions []string
+	var args []any
+	argIdx := 1
 
 	if status != nil {
-		rows, err = s.pool.Query(ctx, `
-			SELECT `+notificationColumns+` FROM notifications WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3
-		`, string(*status), limit, offset)
-	} else {
-		rows, err = s.pool.Query(ctx, `
-			SELECT `+notificationColumns+` FROM notifications ORDER BY created_at DESC LIMIT $1 OFFSET $2
-		`, limit, offset)
+		conditions = append(conditions, fmt.Sprintf("status = $%d", argIdx))
+		args = append(args, string(*status))
+		argIdx++
 	}
+	if priority != nil {
+		conditions = append(conditions, fmt.Sprintf("priority = $%d", argIdx))
+		args = append(args, string(*priority))
+		argIdx++
+	}
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+	args = append(args, limit, offset)
+
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list notifications: %w", err)
 	}
@@ -95,15 +109,28 @@ func (s *Store) List(ctx context.Context, status *model.NotificationStatus, limi
 	return result, nil
 }
 
-func (s *Store) Count(ctx context.Context, status *model.NotificationStatus) (int, error) {
-	var count int
-	var err error
+func (s *Store) Count(ctx context.Context, status *model.NotificationStatus, priority *model.NotificationPriority) (int, error) {
+	query := `SELECT COUNT(*) FROM notifications`
+	var conditions []string
+	var args []any
+	argIdx := 1
 
 	if status != nil {
-		err = s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM notifications WHERE status = $1`, string(*status)).Scan(&count)
-	} else {
-		err = s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM notifications`).Scan(&count)
+		conditions = append(conditions, fmt.Sprintf("status = $%d", argIdx))
+		args = append(args, string(*status))
+		argIdx++
 	}
+	if priority != nil {
+		conditions = append(conditions, fmt.Sprintf("priority = $%d", argIdx))
+		args = append(args, string(*priority))
+		argIdx++
+	}
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var count int
+	err := s.pool.QueryRow(ctx, query, args...).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count notifications: %w", err)
 	}
@@ -151,10 +178,10 @@ func (s *Store) scanOne(ctx context.Context, query string, args ...any) (*model.
 func scanNotification(rows pgx.Rows) (*model.Notification, error) {
 	var n model.Notification
 	var actionsJSON, metadataJSON []byte
-	var status string
+	var status, priority string
 
 	err := rows.Scan(
-		&n.ID, &n.Title, &n.Body, &n.Source, &status,
+		&n.ID, &n.Title, &n.Body, &n.Source, &status, &priority,
 		&actionsJSON, &n.CallbackURL, &metadataJSON, &n.ActionedValue,
 		&n.Timestamp, &n.ActionedAt, &n.ExpiresAt,
 	)
@@ -163,6 +190,7 @@ func scanNotification(rows pgx.Rows) (*model.Notification, error) {
 	}
 
 	n.Status = model.NotificationStatus(status)
+	n.Priority = model.NotificationPriority(priority)
 
 	if actionsJSON != nil {
 		if err := json.Unmarshal(actionsJSON, &n.Actions); err != nil {

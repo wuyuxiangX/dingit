@@ -25,6 +25,7 @@ func init() {
 	sendCmd.Flags().String("actions-json", "", "Actions as JSON array (advanced)")
 	sendCmd.Flags().StringP("callback", "c", "", "Callback URL for responses")
 	sendCmd.Flags().StringP("source", "s", "", "Notification source")
+	sendCmd.Flags().StringP("priority", "p", "normal", "Notification priority (urgent/high/normal/low)")
 	sendCmd.Flags().BoolP("wait", "w", false, "Wait for user response (blocks)")
 
 	_ = sendCmd.MarkFlagRequired("title")
@@ -41,8 +42,14 @@ func runSend(cmd *cobra.Command, args []string) error {
 	source, _ := cmd.Flags().GetString("source")
 	callback, _ := cmd.Flags().GetString("callback")
 	wait, _ := cmd.Flags().GetBool("wait")
+	priority, _ := cmd.Flags().GetString("priority")
 	actionLabels, _ := cmd.Flags().GetStringSlice("action")
 	actionsJSON, _ := cmd.Flags().GetString("actions-json")
+
+	validPriorities := map[string]bool{"urgent": true, "high": true, "normal": true, "low": true}
+	if !validPriorities[priority] {
+		return fmt.Errorf("invalid priority %q: must be one of urgent, high, normal, low", priority)
+	}
 
 	if source == "" {
 		source = cfg.DefaultSource
@@ -67,6 +74,7 @@ func runSend(cmd *cobra.Command, args []string) error {
 		Title:       title,
 		Body:        body,
 		Source:      source,
+		Priority:    priority,
 		Actions:     actions,
 		CallbackURL: callback,
 	})

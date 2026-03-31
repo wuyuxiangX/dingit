@@ -24,6 +24,7 @@ type createRequest struct {
 	Title       string                     `json:"title" binding:"required"`
 	Body        string                     `json:"body" binding:"required"`
 	Source      string                     `json:"source"`
+	Priority    string                     `json:"priority"`
 	Actions     []model.NotificationAction `json:"actions"`
 	CallbackURL *string                    `json:"callback_url"`
 	Metadata    map[string]any             `json:"metadata"`
@@ -41,10 +42,19 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 		source = "unknown"
 	}
 
+	priority := model.NotificationPriority(req.Priority)
+	if req.Priority == "" {
+		priority = model.PriorityNormal
+	} else if !isValidPriority(priority) {
+		response.BadRequest(c, response.CodeInvalidPriority, "Invalid priority value. Allowed: urgent, high, normal, low")
+		return
+	}
+
 	n := &model.Notification{
 		Title:       req.Title,
 		Body:        req.Body,
 		Source:      source,
+		Priority:    priority,
 		Actions:     req.Actions,
 		CallbackURL: req.CallbackURL,
 		Metadata:    req.Metadata,
@@ -82,13 +92,23 @@ func (h *NotificationHandler) List(c *gin.Context) {
 		status = &st
 	}
 
-	notifications, err := h.store.List(ctx, status, pageSize, offset)
+	var priority *model.NotificationPriority
+	if p := c.Query("priority"); p != "" {
+		pr := model.NotificationPriority(p)
+		if !isValidPriority(pr) {
+			response.BadRequest(c, response.CodeInvalidPriority, "Invalid priority filter")
+			return
+		}
+		priority = &pr
+	}
+
+	notifications, err := h.store.List(ctx, status, priority, pageSize, offset)
 	if err != nil {
 		response.InternalError(c, "Failed to list notifications")
 		return
 	}
 
-	total, err := h.store.Count(ctx, status)
+	total, err := h.store.Count(ctx, status, priority)
 	if err != nil {
 		response.InternalError(c, "Failed to count notifications")
 		return
@@ -181,6 +201,14 @@ func (h *NotificationHandler) Delete(c *gin.Context) {
 func isValidStatus(s model.NotificationStatus) bool {
 	switch s {
 	case model.StatusPending, model.StatusActioned, model.StatusDismissed, model.StatusExpired:
+		return true
+	}
+	return false
+}
+
+func isValidPriority(p model.NotificationPriority) bool {
+	switch p {
+	case model.PriorityUrgent, model.PriorityHigh, model.PriorityNormal, model.PriorityLow:
 		return true
 	}
 	return false

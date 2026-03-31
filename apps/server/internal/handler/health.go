@@ -27,7 +27,7 @@ func NewHealthHandler(store *service.Store, hub *ws.Hub) *HealthHandler {
 
 func (h *HealthHandler) Health(c *gin.Context) {
 	pending := model.StatusPending
-	count, _ := h.store.Count(c.Request.Context(), &pending)
+	count, _ := h.store.Count(c.Request.Context(), &pending, nil)
 
 	response.Success(c, gin.H{
 		"status":                "ok",

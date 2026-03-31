@@ -34,6 +34,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool) error {
 		body            TEXT NOT NULL,
 		source          TEXT NOT NULL DEFAULT 'unknown',
 		status          TEXT NOT NULL DEFAULT 'pending',
+		priority        TEXT NOT NULL DEFAULT 'normal',
 		actions         JSONB NOT NULL DEFAULT '[]',
 		callback_url    TEXT,
 		metadata        JSONB,
@@ -45,6 +46,9 @@ func migrate(ctx context.Context, pool *pgxpool.Pool) error {
 
 	CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status);
 	CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
+
+	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal';
+	CREATE INDEX IF NOT EXISTS idx_notifications_priority ON notifications(priority);
 
 	CREATE TABLE IF NOT EXISTS api_keys (
 		id           TEXT PRIMARY KEY,

@@ -14,6 +14,15 @@ const (
 	StatusExpired   NotificationStatus = "expired"
 )
 
+type NotificationPriority string
+
+const (
+	PriorityUrgent NotificationPriority = "urgent"
+	PriorityHigh   NotificationPriority = "high"
+	PriorityNormal NotificationPriority = "normal"
+	PriorityLow    NotificationPriority = "low"
+)
+
 type NotificationAction struct {
 	Label       string  `json:"label"`
 	Value       string  `json:"value"`
@@ -31,6 +40,7 @@ type Notification struct {
 	Actions       []NotificationAction `json:"actions"`
 	CallbackURL   *string              `json:"callback_url"`
 	Status        NotificationStatus   `json:"status"`
+	Priority      NotificationPriority `json:"priority"`
 	ActionedAt    *time.Time           `json:"actioned_at"`
 	ActionedValue *string              `json:"actioned_value"`
 	Metadata      map[string]any       `json:"metadata"`

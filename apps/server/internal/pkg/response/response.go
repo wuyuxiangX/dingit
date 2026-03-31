@@ -15,7 +15,8 @@ const (
 	CodeBadRequest = 1002
 
 	// Notification 10xxx
-	CodeInvalidStatus = 10001
+	CodeInvalidStatus   = 10001
+	CodeInvalidPriority = 10002
 
 	// Auth 11xxx
 	CodeUnauthorized = 11001

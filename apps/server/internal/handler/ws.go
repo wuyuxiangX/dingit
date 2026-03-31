@@ -36,7 +36,7 @@ func (h *WsHandler) Handle(c *gin.Context) {
 	logger.Info("New WebSocket client connected", zap.String("ip", c.ClientIP()))
 
 	pending := model.StatusPending
-	notifications, err := h.store.List(c.Request.Context(), &pending, 1000, 0)
+	notifications, err := h.store.List(c.Request.Context(), &pending, nil, 1000, 0)
 	if err != nil {
 		logger.Error("Failed to load pending notifications", zap.Error(err))
 		notifications = []model.Notification{}
