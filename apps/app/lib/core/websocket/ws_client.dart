@@ -4,12 +4,14 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:dingit_shared/dingit_shared.dart';
+import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 enum WsConnectionState { disconnected, connecting, connected }
 
 class WsClient {
-  final String url;
+  String url;
+  String? apiKey;
   final void Function(WsMessage message) onMessage;
 
   WebSocketChannel? _channel;
@@ -20,14 +22,28 @@ class WsClient {
 
   final connectionState = ValueNotifier(WsConnectionState.disconnected);
 
-  WsClient({required this.url, required this.onMessage});
+  WsClient({required this.url, this.apiKey, required this.onMessage});
+
+  /// Disconnect and reconnect with a new URL and/or API key.
+  Future<void> reconnectWithUrl(String newUrl, {String? newApiKey}) async {
+    url = newUrl;
+    if (newApiKey != null) apiKey = newApiKey;
+    disconnect();
+    _reconnectAttempts = 0;
+    await connect();
+  }
 
   Future<void> connect() async {
     if (connectionState.value == WsConnectionState.connecting) return;
     connectionState.value = WsConnectionState.connecting;
 
     try {
-      _channel = WebSocketChannel.connect(Uri.parse(url));
+      final uri = Uri.parse(url);
+      final headers = <String, dynamic>{};
+      if (apiKey != null && apiKey!.isNotEmpty) {
+        headers['X-API-Key'] = apiKey;
+      }
+      _channel = IOWebSocketChannel.connect(uri, headers: headers);
       await _channel!.ready;
 
       connectionState.value = WsConnectionState.connected;

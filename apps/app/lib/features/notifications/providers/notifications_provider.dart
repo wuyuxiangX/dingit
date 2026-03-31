@@ -2,13 +2,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
-import '../../../core/env/env_config.dart';
 import '../../../core/websocket/ws_client.dart';
+import '../../settings/providers/settings_provider.dart';
 
 final wsClientProvider = Provider<WsClient>((ref) {
+  final settings = ref.watch(settingsProvider);
   final notifier = ref.read(notificationsProvider.notifier);
   final client = WsClient(
-    url: EnvConfig.wsUrl,
+    url: settings.wsUrl,
+    apiKey: settings.apiKey,
     onMessage: notifier.handleWsMessage,
   );
   ref.onDispose(() => client.disconnect());
