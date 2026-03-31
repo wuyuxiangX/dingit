@@ -2,8 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
+import '../../../core/api/api_client.dart';
+import '../../../core/env/env_config.dart';
 import '../../../core/websocket/ws_client.dart';
 import '../../settings/providers/settings_provider.dart';
+
+final apiClientProvider = Provider<ApiClient>((ref) {
+  return ApiClient(baseUrl: EnvConfig.apiUrl, apiKey: EnvConfig.apiKey);
+});
 
 final wsClientProvider = Provider<WsClient>((ref) {
   final settings = ref.watch(settingsProvider);
@@ -69,7 +75,17 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
   }
 
   void dismissNotification(String id) {
-    state = state.where((n) => n.id != id).toList();
+    // Optimistically update local state
+    state = state.map((n) {
+      if (n.id == id) {
+        return n.copyWith(status: NotificationStatus.dismissed);
+      }
+      return n;
+    }).toList();
+
+    // Sync to server via PATCH API
+    final apiClient = ref.read(apiClientProvider);
+    apiClient.patchNotificationStatus(id, 'dismissed');
   }
 
   List<NotificationModel> get pendingNotifications =>

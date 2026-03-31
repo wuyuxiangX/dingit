@@ -8,4 +8,9 @@ abstract final class EnvConfig {
     'API_URL',
     defaultValue: 'http://localhost:8080',
   );
+
+  static const apiKey = String.fromEnvironment(
+    'API_KEY',
+    defaultValue: '',
+  );
 }
