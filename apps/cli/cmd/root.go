@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dingit-me/cli/internal/client"
+	"github.com/dingit-me/cli/internal/config"
 	"github.com/spf13/cobra"
 )
 
 var serverURL string
+var apiKeyFlag string
 
 var rootCmd = &cobra.Command{
 	Use:   "dingit",
@@ -23,4 +26,18 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "Server URL override")
+	rootCmd.PersistentFlags().StringVar(&apiKeyFlag, "api-key", "", "API key override")
+}
+
+func newClient() *client.Client {
+	cfg := config.Load()
+	base := cfg.ServerURL
+	if serverURL != "" {
+		base = serverURL
+	}
+	apiKey := cfg.APIKey
+	if apiKeyFlag != "" {
+		apiKey = apiKeyFlag
+	}
+	return client.New(base, apiKey)
 }

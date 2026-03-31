@@ -10,6 +10,7 @@ import (
 type Config struct {
 	ServerURL     string `json:"server_url"`
 	DefaultSource string `json:"default_source"`
+	APIKey        string `json:"api_key"`
 }
 
 func configPath() string {
@@ -23,10 +24,15 @@ func Load() *Config {
 		DefaultSource: "cli",
 	}
 	data, err := os.ReadFile(configPath())
-	if err != nil {
-		return c
+	if err == nil {
+		_ = json.Unmarshal(data, c)
 	}
-	_ = json.Unmarshal(data, c)
+
+	// Environment variable overrides
+	if v := os.Getenv("DINGIT_API_KEY"); v != "" {
+		c.APIKey = v
+	}
+
 	return c
 }
 
@@ -35,5 +41,5 @@ func (c *Config) Save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(configPath(), data, 0644)
+	return os.WriteFile(configPath(), data, 0600)
 }

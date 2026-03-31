@@ -3,8 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/dingit-me/cli/internal/client"
-	"github.com/dingit-me/cli/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -19,13 +17,7 @@ func init() {
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
-	cfg := config.Load()
-	base := cfg.ServerURL
-	if serverURL != "" {
-		base = serverURL
-	}
-
-	c := client.New(base)
+	c := newClient()
 
 	if len(args) > 0 {
 		data, err := c.Get(args[0])
