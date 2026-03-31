@@ -1,12 +1,12 @@
 package handler
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/dingit-me/server/internal/model"
+	"github.com/dingit-me/server/internal/pkg/response"
 	"github.com/dingit-me/server/internal/service"
 	"github.com/dingit-me/server/internal/ws"
 )
@@ -29,7 +29,7 @@ func (h *HealthHandler) Health(c *gin.Context) {
 	pending := model.StatusPending
 	count, _ := h.store.Count(c.Request.Context(), &pending)
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, gin.H{
 		"status":                "ok",
 		"uptime_seconds":        int(time.Since(h.startTime).Seconds()),
 		"connected_clients":     h.hub.ConnectedClients(),

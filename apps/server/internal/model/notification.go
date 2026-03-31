@@ -47,10 +47,11 @@ type ActionResponse struct {
 // --- WebSocket Protocol Messages ---
 
 type WsMessage struct {
-	Type          string          `json:"type"`
-	Notification  *Notification   `json:"notification,omitempty"`
-	Notifications []Notification  `json:"notifications,omitempty"`
-	Response      *ActionResponse `json:"response,omitempty"`
+	Type           string          `json:"type"`
+	Notification   *Notification   `json:"notification,omitempty"`
+	Notifications  []Notification  `json:"notifications,omitempty"`
+	Response       *ActionResponse `json:"response,omitempty"`
+	NotificationID *string         `json:"notification_id,omitempty"`
 }
 
 func NewNotificationNewMsg(n *Notification) WsMessage {
@@ -63,6 +64,10 @@ func NewNotificationUpdatedMsg(n *Notification) WsMessage {
 
 func NewSyncFullMsg(notifications []Notification) WsMessage {
 	return WsMessage{Type: "sync.full", Notifications: notifications}
+}
+
+func NewNotificationDeletedMsg(id string) WsMessage {
+	return WsMessage{Type: "notification.deleted", NotificationID: &id}
 }
 
 func NewPongMsg() WsMessage {

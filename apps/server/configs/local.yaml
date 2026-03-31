@@ -1,0 +1,15 @@
+app:
+  name: dingit
+  env: local
+
+server:
+  port: 8080
+
+logger:
+  level: debug
+  format: console
+  # file: logs/dingit.log  # uncomment to enable file logging
+
+cors:
+  allowed_origins:
+    - "*"

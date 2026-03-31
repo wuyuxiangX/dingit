@@ -13,6 +13,8 @@ import (
 	"github.com/dingit-me/server/internal/model"
 )
 
+const notificationColumns = `id, title, body, source, status, actions, callback_url, metadata, actioned_value, created_at, actioned_at, expires_at`
+
 type Store struct {
 	pool *pgxpool.Pool
 }
@@ -55,7 +57,7 @@ func (s *Store) Add(ctx context.Context, n *model.Notification) (*model.Notifica
 }
 
 func (s *Store) Get(ctx context.Context, id string) (*model.Notification, error) {
-	return s.scanOne(ctx, `SELECT * FROM notifications WHERE id = $1`, id)
+	return s.scanOne(ctx, `SELECT `+notificationColumns+` FROM notifications WHERE id = $1`, id)
 }
 
 func (s *Store) List(ctx context.Context, status *model.NotificationStatus, limit, offset int) ([]model.Notification, error) {
@@ -64,11 +66,11 @@ func (s *Store) List(ctx context.Context, status *model.NotificationStatus, limi
 
 	if status != nil {
 		rows, err = s.pool.Query(ctx, `
-			SELECT * FROM notifications WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3
+			SELECT `+notificationColumns+` FROM notifications WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3
 		`, string(*status), limit, offset)
 	} else {
 		rows, err = s.pool.Query(ctx, `
-			SELECT * FROM notifications ORDER BY created_at DESC LIMIT $1 OFFSET $2
+			SELECT `+notificationColumns+` FROM notifications ORDER BY created_at DESC LIMIT $1 OFFSET $2
 		`, limit, offset)
 	}
 	if err != nil {
@@ -84,10 +86,13 @@ func (s *Store) List(ctx context.Context, status *model.NotificationStatus, limi
 		}
 		result = append(result, *n)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate notifications: %w", err)
+	}
 	if result == nil {
 		result = []model.Notification{}
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 func (s *Store) Count(ctx context.Context, status *model.NotificationStatus) (int, error) {
@@ -112,17 +117,19 @@ func (s *Store) UpdateStatus(ctx context.Context, id string, status model.Notifi
 		actionedAt = &now
 	}
 
-	tag, err := s.pool.Exec(ctx, `
-		UPDATE notifications SET status = $1, actioned_value = $2, actioned_at = $3 WHERE id = $4
-	`, string(status), actionedValue, actionedAt, id)
-	if err != nil {
-		return nil, fmt.Errorf("update status: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return nil, nil
-	}
+	return s.scanOne(ctx, `
+		UPDATE notifications SET status = $1, actioned_value = $2, actioned_at = $3
+		WHERE id = $4
+		RETURNING `+notificationColumns,
+		string(status), actionedValue, actionedAt, id)
+}
 
-	return s.Get(ctx, id)
+func (s *Store) Delete(ctx context.Context, id string) (bool, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM notifications WHERE id = $1`, id)
+	if err != nil {
+		return false, fmt.Errorf("delete notification: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 func (s *Store) scanOne(ctx context.Context, query string, args ...any) (*model.Notification, error) {
@@ -133,6 +140,9 @@ func (s *Store) scanOne(ctx context.Context, query string, args ...any) (*model.
 	defer rows.Close()
 
 	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("scan query: %w", err)
+		}
 		return nil, nil
 	}
 	return scanNotification(rows)
