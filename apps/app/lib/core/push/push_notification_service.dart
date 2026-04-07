@@ -34,9 +34,19 @@ class PushNotificationService {
       return;
     }
 
-    // Get APNs token first (iOS)
-    final apnsToken = await _messaging.getAPNSToken();
-    debugPrint('[Push] APNs token: ${apnsToken != null ? "obtained" : "null"}');
+    // Wait for APNs token (iOS requires this before FCM token)
+    String? apnsToken;
+    for (var i = 0; i < 10; i++) {
+      apnsToken = await _messaging.getAPNSToken();
+      if (apnsToken != null) break;
+      await Future.delayed(const Duration(seconds: 1));
+    }
+    debugPrint('[Push] APNs token: ${apnsToken != null ? "obtained" : "null after retries"}');
+
+    if (apnsToken == null) {
+      debugPrint('[Push] APNs token unavailable, FCM registration skipped');
+      return;
+    }
 
     // Get FCM token
     _deviceToken = await _messaging.getToken();
