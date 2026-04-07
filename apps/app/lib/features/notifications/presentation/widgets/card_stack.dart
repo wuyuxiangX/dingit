@@ -11,12 +11,14 @@ class CardStack extends StatefulWidget {
   final List<NotificationModel> notifications;
   final void Function(NotificationModel notification, String action) onAction;
   final void Function(NotificationModel notification) onDismiss;
+  final void Function(NotificationModel notification)? onTap;
 
   const CardStack({
     super.key,
     required this.notifications,
     required this.onAction,
     required this.onDismiss,
+    this.onTap,
   });
 
   @override
@@ -229,6 +231,7 @@ class _CardStackState extends State<CardStack>
         child: Transform.rotate(
           angle: rotation,
           child: GestureDetector(
+            onTap: () => widget.onTap?.call(widget.notifications[index]),
             onPanStart: _onPanStart,
             onPanUpdate: _onPanUpdate,
             onPanEnd: _onPanEnd,

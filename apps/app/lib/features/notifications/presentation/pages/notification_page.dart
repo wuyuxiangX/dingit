@@ -87,6 +87,9 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
                 onDismiss: (notification) {
                   notifier.dismissNotification(notification.id);
                 },
+                onTap: (notification) {
+                  context.push('/notification/${notification.id}');
+                },
               ),
             ),
 
