@@ -62,6 +62,19 @@ func main() {
 	store := service.NewStore(pool)
 	callbackSvc := service.NewCallbackService()
 	apiKeySvc := service.NewAPIKeyService(pool)
+	deviceSvc := service.NewDeviceService(pool)
+
+	// Push notification service (optional — requires GOOGLE_APPLICATION_CREDENTIALS)
+	var pushSvc *service.PushService
+	if projectID := os.Getenv("FCM_PROJECT_ID"); projectID != "" {
+		var err error
+		pushSvc, err = service.NewPushService(projectID, deviceSvc)
+		if err != nil {
+			logger.Warn("FCM push disabled — credentials not found", zap.Error(err))
+		} else {
+			logger.Info("FCM push enabled", zap.String("project_id", projectID))
+		}
+	}
 
 	// Seed API key from env if provided
 	if err := apiKeySvc.SeedFromEnv(ctx, cfg.APIKey); err != nil {
@@ -113,9 +126,10 @@ func main() {
 	defer hub.Close()
 
 	// Handlers
-	notificationHandler := handler.NewNotificationHandler(store, hub, callbackSvc)
+	notificationHandler := handler.NewNotificationHandler(store, hub, callbackSvc, pushSvc)
 	healthHandler := handler.NewHealthHandler(store, hub)
 	wsHandler := handler.NewWsHandler(store, hub)
+	deviceHandler := handler.NewDeviceHandler(deviceSvc)
 
 	// Router
 	r := gin.New()
@@ -143,6 +157,7 @@ func main() {
 		api.GET("/notifications/:id", notificationHandler.GetByID)
 		api.PATCH("/notifications/:id", notificationHandler.Update)
 		api.DELETE("/notifications/:id", notificationHandler.Delete)
+		api.POST("/devices", deviceHandler.Register)
 	}
 
 	// Server with timeouts and graceful shutdown

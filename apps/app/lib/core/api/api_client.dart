@@ -87,4 +87,16 @@ class ApiClient {
       debugPrint('[ApiClient] PATCH $url error: $e');
     }
   }
+
+  Future<void> registerDevice({required String token, required String platform}) async {
+    final url = Uri.parse('$baseUrl/api/devices');
+    final response = await _client.post(
+      url,
+      headers: _headers,
+      body: jsonEncode({'token': token, 'platform': platform}),
+    );
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to register device: ${response.statusCode}');
+    }
+  }
 }

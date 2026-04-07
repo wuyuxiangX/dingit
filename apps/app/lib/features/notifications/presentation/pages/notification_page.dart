@@ -22,6 +22,7 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(wsClientProvider).connect();
+      ref.read(pushServiceProvider).initialize();
     });
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/push/push_notification_service.dart';
 import '../../../core/websocket/ws_client.dart';
 import '../../settings/providers/settings_provider.dart';
 
@@ -25,6 +26,11 @@ final wsClientProvider = Provider<WsClient>((ref) {
 
 final connectionStateProvider = Provider<ValueNotifier<WsConnectionState>>((ref) {
   return ref.watch(wsClientProvider).connectionState;
+});
+
+final pushServiceProvider = Provider<PushNotificationService>((ref) {
+  final api = ref.watch(apiClientProvider);
+  return PushNotificationService(api);
 });
 
 final notificationsProvider =

@@ -60,6 +60,14 @@ func migrate(ctx context.Context, pool *pgxpool.Pool) error {
 		created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		last_used_at TIMESTAMPTZ
 	);
+
+	CREATE TABLE IF NOT EXISTS devices (
+		id         TEXT PRIMARY KEY,
+		token      TEXT NOT NULL UNIQUE,
+		platform   TEXT NOT NULL DEFAULT 'ios',
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
 	`
 
 	_, err := pool.Exec(ctx, query)
