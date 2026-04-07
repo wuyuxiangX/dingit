@@ -28,6 +28,7 @@ type SendRequest struct {
 	Body        string                   `json:"body"`
 	Source      string                   `json:"source"`
 	Priority    string                   `json:"priority,omitempty"`
+	Icon        string                   `json:"icon,omitempty"`
 	Actions     []map[string]interface{} `json:"actions,omitempty"`
 	CallbackURL string                   `json:"callback_url,omitempty"`
 	Metadata    map[string]interface{}   `json:"metadata,omitempty"`

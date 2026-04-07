@@ -11,6 +11,7 @@ class DingitApp extends StatelessWidget {
     return MaterialApp.router(
       title: 'Dingit',
       debugShowCheckedModeBanner: false,
+      // showPerformanceOverlay: true,
       theme: AppTheme.light,
       routerConfig: appRouter,
     );

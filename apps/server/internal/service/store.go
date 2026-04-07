@@ -14,7 +14,7 @@ import (
 	"github.com/dingit-me/server/internal/model"
 )
 
-const notificationColumns = `id, title, body, source, status, priority, actions, callback_url, metadata, actioned_value, created_at, actioned_at, expires_at`
+const notificationColumns = `id, title, body, source, status, priority, icon, actions, callback_url, metadata, actioned_value, created_at, actioned_at, expires_at`
 
 type Store struct {
 	pool *pgxpool.Pool
@@ -50,9 +50,9 @@ func (s *Store) Add(ctx context.Context, n *model.Notification) (*model.Notifica
 	}
 
 	_, err = s.pool.Exec(ctx, `
-		INSERT INTO notifications (id, title, body, source, status, priority, actions, callback_url, metadata, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-	`, n.ID, n.Title, n.Body, n.Source, n.Status, n.Priority, actionsJSON, n.CallbackURL, metadataJSON, n.Timestamp)
+		INSERT INTO notifications (id, title, body, source, status, priority, icon, actions, callback_url, metadata, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	`, n.ID, n.Title, n.Body, n.Source, n.Status, n.Priority, n.Icon, actionsJSON, n.CallbackURL, metadataJSON, n.Timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("insert notification: %w", err)
 	}
@@ -65,24 +65,8 @@ func (s *Store) Get(ctx context.Context, id string) (*model.Notification, error)
 }
 
 func (s *Store) List(ctx context.Context, status *model.NotificationStatus, priority *model.NotificationPriority, limit, offset int) ([]model.Notification, error) {
-	query := `SELECT ` + notificationColumns + ` FROM notifications`
-	var conditions []string
-	var args []any
-	argIdx := 1
-
-	if status != nil {
-		conditions = append(conditions, fmt.Sprintf("status = $%d", argIdx))
-		args = append(args, string(*status))
-		argIdx++
-	}
-	if priority != nil {
-		conditions = append(conditions, fmt.Sprintf("priority = $%d", argIdx))
-		args = append(args, string(*priority))
-		argIdx++
-	}
-	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ")
-	}
+	where, args, argIdx := buildWhereClause(status, priority)
+	query := `SELECT ` + notificationColumns + ` FROM notifications` + where
 	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 	args = append(args, limit, offset)
 
@@ -110,7 +94,18 @@ func (s *Store) List(ctx context.Context, status *model.NotificationStatus, prio
 }
 
 func (s *Store) Count(ctx context.Context, status *model.NotificationStatus, priority *model.NotificationPriority) (int, error) {
-	query := `SELECT COUNT(*) FROM notifications`
+	where, args, _ := buildWhereClause(status, priority)
+	query := `SELECT COUNT(*) FROM notifications` + where
+
+	var count int
+	err := s.pool.QueryRow(ctx, query, args...).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count notifications: %w", err)
+	}
+	return count, nil
+}
+
+func buildWhereClause(status *model.NotificationStatus, priority *model.NotificationPriority) (string, []any, int) {
 	var conditions []string
 	var args []any
 	argIdx := 1
@@ -125,16 +120,11 @@ func (s *Store) Count(ctx context.Context, status *model.NotificationStatus, pri
 		args = append(args, string(*priority))
 		argIdx++
 	}
-	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ")
-	}
 
-	var count int
-	err := s.pool.QueryRow(ctx, query, args...).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("count notifications: %w", err)
+	if len(conditions) == 0 {
+		return "", args, argIdx
 	}
-	return count, nil
+	return " WHERE " + strings.Join(conditions, " AND "), args, argIdx
 }
 
 func (s *Store) UpdateStatus(ctx context.Context, id string, status model.NotificationStatus, actionedValue *string) (*model.Notification, error) {
@@ -182,7 +172,7 @@ func scanNotification(rows pgx.Rows) (*model.Notification, error) {
 
 	err := rows.Scan(
 		&n.ID, &n.Title, &n.Body, &n.Source, &status, &priority,
-		&actionsJSON, &n.CallbackURL, &metadataJSON, &n.ActionedValue,
+		&n.Icon, &actionsJSON, &n.CallbackURL, &metadataJSON, &n.ActionedValue,
 		&n.Timestamp, &n.ActionedAt, &n.ExpiresAt,
 	)
 	if err != nil {

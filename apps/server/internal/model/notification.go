@@ -41,6 +41,7 @@ type Notification struct {
 	CallbackURL   *string              `json:"callback_url"`
 	Status        NotificationStatus   `json:"status"`
 	Priority      NotificationPriority `json:"priority"`
+	Icon          *string              `json:"icon,omitempty"`
 	ActionedAt    *time.Time           `json:"actioned_at"`
 	ActionedValue *string              `json:"actioned_value"`
 	Metadata      map[string]any       `json:"metadata"`
@@ -59,7 +60,7 @@ type ActionResponse struct {
 type WsMessage struct {
 	Type           string          `json:"type"`
 	Notification   *Notification   `json:"notification,omitempty"`
-	Notifications  []Notification  `json:"notifications,omitempty"`
+	Notifications  []Notification  `json:"notifications"`
 	Response       *ActionResponse `json:"response,omitempty"`
 	NotificationID *string         `json:"notification_id,omitempty"`
 }
@@ -73,6 +74,9 @@ func NewNotificationUpdatedMsg(n *Notification) WsMessage {
 }
 
 func NewSyncFullMsg(notifications []Notification) WsMessage {
+	if notifications == nil {
+		notifications = []Notification{}
+	}
 	return WsMessage{Type: "sync.full", Notifications: notifications}
 }
 

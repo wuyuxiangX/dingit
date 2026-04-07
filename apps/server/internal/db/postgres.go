@@ -50,6 +50,8 @@ func migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal';
 	CREATE INDEX IF NOT EXISTS idx_notifications_priority ON notifications(priority);
 
+	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS icon TEXT;
+
 	CREATE TABLE IF NOT EXISTS api_keys (
 		id           TEXT PRIMARY KEY,
 		name         TEXT NOT NULL DEFAULT '',

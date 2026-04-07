@@ -20,6 +20,8 @@ abstract class NotificationModel with _$NotificationModel {
     @JsonKey(name: 'actioned_at') DateTime? actionedAt,
     @JsonKey(name: 'actioned_value') String? actionedValue,
     Map<String, dynamic>? metadata,
+    @Default('normal') String priority,
+    String? icon,
   }) = _NotificationModel;
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) =>

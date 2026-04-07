@@ -29,22 +29,27 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
   Widget build(BuildContext context) {
     final pending = ref.watch(pendingNotificationsProvider);
     final topNotification = pending.isNotEmpty ? pending.first : null;
+    final notifier = ref.read(notificationsProvider.notifier);
+
+    void dismissTop() => notifier.dismissNotification(topNotification!.id);
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
               child: Row(
                 children: [
                   GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () => context.push('/settings'),
-                    child: Icon(LucideIcons.settings, size: 20, color: AppColors.ink),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(LucideIcons.settings, size: 20, color: AppColors.ink),
+                    ),
                   ),
                   const Spacer(),
-                  // Center title
                   Column(
                     children: [
                       Text(
@@ -57,11 +62,15 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
                   ),
                   const Spacer(),
                   GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () {
                       ref.read(wsClientProvider).disconnect();
                       ref.read(wsClientProvider).connect();
                     },
-                    child: Icon(LucideIcons.refreshCw, size: 18, color: AppColors.ink),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(LucideIcons.refreshCw, size: 18, color: AppColors.ink),
+                    ),
                   ),
                 ],
               ),
@@ -69,40 +78,25 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
 
             const SizedBox(height: 16),
 
-            // Card stack — fills all available space
             Expanded(
               child: CardStack(
                 notifications: pending,
                 onAction: (notification, action) {
-                  ref
-                      .read(notificationsProvider.notifier)
-                      .respondToNotification(notification.id, action);
+                  notifier.respondToNotification(notification.id, action);
                 },
                 onDismiss: (notification) {
-                  ref
-                      .read(notificationsProvider.notifier)
-                      .dismissNotification(notification.id);
+                  notifier.dismissNotification(notification.id);
                 },
               ),
             ),
 
-            // Action bar
             ActionBar(
               notification: topNotification,
               onAction: topNotification != null
-                  ? (actionValue) {
-                      ref
-                          .read(notificationsProvider.notifier)
-                          .respondToNotification(topNotification.id, actionValue);
-                    }
+                  ? (actionValue) => notifier.respondToNotification(topNotification.id, actionValue)
                   : null,
-              onNext: pending.length > 1
-                  ? () {
-                      ref
-                          .read(notificationsProvider.notifier)
-                          .dismissNotification(pending.first.id);
-                    }
-                  : null,
+              onDismiss: topNotification != null ? dismissTop : null,
+              onNext: pending.length > 1 ? dismissTop : null,
             ),
           ],
         ),

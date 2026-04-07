@@ -75,21 +75,20 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
   }
 
   void dismissNotification(String id) {
-    // Optimistically update local state
-    state = state.map((n) {
-      if (n.id == id) {
-        return n.copyWith(status: NotificationStatus.dismissed);
-      }
-      return n;
-    }).toList();
-
-    // Sync to server via PATCH API
-    final apiClient = ref.read(apiClientProvider);
-    apiClient.patchNotificationStatus(id, 'dismissed');
+    final previous = state;
+    state = state.where((n) => n.id != id).toList();
+    _dismissOnServer(id, previous);
   }
 
-  List<NotificationModel> get pendingNotifications =>
-      state.where((n) => n.status == NotificationStatus.pending).toList();
+  Future<void> _dismissOnServer(String id, List<NotificationModel> previous) async {
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.patchNotificationStatus(id, 'dismissed');
+    } catch (e) {
+      debugPrint('[Notifications] Dismiss sync failed: $e');
+      state = previous;
+    }
+  }
 }
 
 final pendingNotificationsProvider = Provider<List<NotificationModel>>((ref) {

@@ -33,10 +33,8 @@ class _CardStackState extends State<CardStack>
 
   static const _maxVisible = 3;
   static const _swipeThreshold = 100.0;
-
-  // Stacking: back cards peek out BELOW the front card
-  static const _peekHeight = 12.0;   // how much each back card peeks below
-  static const _narrowPerCard = 6.0;  // each back card is narrower (per side)
+  static const _peekHeight = 12.0;
+  static const _narrowPerCard = 6.0;
 
   @override
   void initState() {
@@ -66,7 +64,12 @@ class _CardStackState extends State<CardStack>
   void _onPanEnd(DragEndDetails details) {
     if (!_isDragging) return;
     _isDragging = false;
-    if (_dragOffset.dx.abs() > _swipeThreshold) {
+
+    final velocity = details.velocity.pixelsPerSecond.dx;
+    final isHighSpeedFling = velocity.abs() > 800.0;
+
+    if (_dragOffset.dx.abs() > _swipeThreshold ||
+        (isHighSpeedFling && _dragOffset.dx.abs() > 30)) {
       _animateSwipeAway(_dragOffset.dx > 0);
     } else {
       _animateSnapBack();
@@ -74,7 +77,7 @@ class _CardStackState extends State<CardStack>
   }
 
   void _animateSwipeAway(bool toRight) {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
     final targetX = toRight ? screenWidth * 1.5 : -screenWidth * 1.5;
 
     _slideAnimation = Tween<Offset>(
@@ -130,9 +133,20 @@ class _CardStackState extends State<CardStack>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(LucideIcons.inbox, size: 40, color: AppColors.divider),
-            const SizedBox(height: 14),
-            Text('All clear', style: Theme.of(context).textTheme.bodyMedium),
+            Icon(LucideIcons.checkCircle2, size: 48, color: AppColors.success),
+            const SizedBox(height: 16),
+            Text(
+              'All clear',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineLarge
+                  ?.copyWith(fontSize: 28),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "You're all caught up",
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
           ],
         ),
       );
@@ -143,30 +157,32 @@ class _CardStackState extends State<CardStack>
 
     return Column(
       children: [
-        // Card stack area
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // Front card height leaves room for back cards to peek
-              final frontBottom = (count - 1) * _peekHeight + 8;
+              final maxCardWidth = min(constraints.maxWidth, 420.0);
+              final frontBottom = (_maxVisible - 1) * _peekHeight + 8;
 
-              return _AnimListenable(
-                listenable: _animController,
-                builder: (context) {
-                  return Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      for (int i = count - 1; i >= 0; i--)
-                        _buildCard(i, count, constraints, frontBottom),
-                    ],
-                  );
-                },
+              return Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxCardWidth),
+                  child: AnimatedBuilder(
+                    animation: _animController,
+                    builder: (context, _) {
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          for (int i = count - 1; i >= 0; i--)
+                            _buildCard(i, count, frontBottom),
+                        ],
+                      );
+                    },
+                  ),
+                ),
               );
             },
           ),
         ),
-
-        // Card counter
         Padding(
           padding: const EdgeInsets.only(top: 12, bottom: 4),
           child: Row(
@@ -194,13 +210,10 @@ class _CardStackState extends State<CardStack>
     );
   }
 
-  Widget _buildCard(int index, int count, BoxConstraints constraints, double frontBottom) {
+  Widget _buildCard(int index, int count, double frontBottom) {
     final isTop = index == 0;
     final dragProgress = min(1.0, _dragOffset.dx.abs() / _swipeThreshold);
 
-    // Front card: top=0, bottom=frontBottom, left/right=16
-    // Card 1: peeks below front card, narrower
-    // Card 2: peeks below card 1, even narrower
     final hPad = 16.0 + (index * _narrowPerCard);
     final bottom = frontBottom - (index * _peekHeight);
 
@@ -225,7 +238,6 @@ class _CardStackState extends State<CardStack>
       );
     }
 
-    // Animate back cards toward front position when dragging
     final animHPad = hPad - (_narrowPerCard * dragProgress);
     final animBottom = bottom + (_peekHeight * dragProgress);
     final opacity = index == count - 1 ? 0.7 + (0.3 * dragProgress) : 1.0;
@@ -241,16 +253,4 @@ class _CardStackState extends State<CardStack>
       ),
     );
   }
-}
-
-class _AnimListenable extends AnimatedWidget {
-  final Widget Function(BuildContext context) builder;
-
-  const _AnimListenable({
-    required super.listenable,
-    required this.builder,
-  });
-
-  @override
-  Widget build(BuildContext context) => builder(context);
 }

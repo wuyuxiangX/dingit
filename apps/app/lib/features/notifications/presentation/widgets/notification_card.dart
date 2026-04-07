@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
 import '../../../../app/theme/app_colors.dart';
@@ -29,7 +30,6 @@ class NotificationCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Date tag
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             decoration: BoxDecoration(
@@ -44,20 +44,30 @@ class NotificationCard extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // Source — small, subtle
           if (notification.source.isNotEmpty) ...[
-            Text(
-              notification.source.toUpperCase(),
-              style: theme.titleSmall?.copyWith(
-                letterSpacing: 1.5,
-                fontSize: 11,
-                color: AppColors.accent,
-              ),
+            Row(
+              children: [
+                if (notification.icon case final icon? when icon.isNotEmpty) ...[
+                  Icon(
+                    _resolveIcon(icon),
+                    size: 16,
+                    color: AppColors.accent,
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  notification.source.toUpperCase(),
+                  style: theme.titleSmall?.copyWith(
+                    letterSpacing: 1.5,
+                    fontSize: 11,
+                    color: AppColors.accent,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
           ],
 
-          // Title
           Text(
             notification.title,
             style: theme.titleLarge?.copyWith(
@@ -68,7 +78,6 @@ class NotificationCard extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Body — fill available space
           Expanded(
             child: Text(
               notification.body,
@@ -82,7 +91,6 @@ class NotificationCard extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Bottom arrow
           Align(
             alignment: Alignment.bottomRight,
             child: Icon(
@@ -94,6 +102,23 @@ class NotificationCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static const _iconMap = <String, IconData>{
+    'github': LucideIcons.github,
+    'slack': LucideIcons.messageSquare,
+    'mail': LucideIcons.mail,
+    'alert': LucideIcons.alertTriangle,
+    'check': LucideIcons.checkCircle2,
+    'deploy': LucideIcons.rocket,
+    'ci': LucideIcons.activity,
+    'server': LucideIcons.server,
+    'database': LucideIcons.database,
+    'bug': LucideIcons.bug,
+  };
+
+  IconData _resolveIcon(String iconName) {
+    return _iconMap[iconName.toLowerCase().trim()] ?? LucideIcons.bell;
   }
 
   String _formatDate(DateTime date) {

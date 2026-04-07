@@ -8,42 +8,57 @@ class ActionBar extends StatelessWidget {
   final NotificationModel? notification;
   final void Function(String actionValue)? onAction;
   final VoidCallback? onNext;
+  final VoidCallback? onDismiss;
 
   const ActionBar({
     super.key,
     this.notification,
     this.onAction,
     this.onNext,
+    this.onDismiss,
   });
 
   @override
   Widget build(BuildContext context) {
     final actions = notification?.actions ?? [];
-    if (actions.isEmpty && onNext == null) return const SizedBox(height: 80);
+    final hasContent = actions.isNotEmpty || onNext != null || onDismiss != null;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 8, 0, 12),
-      child: Row(
-        children: [
-          for (final action in actions)
-            Expanded(
-              child: _ActionItem(
-                label: action.label,
-                icon: _resolveIcon(action.icon, action.value),
-                destructive: action.destructive,
-                onTap: () => onAction?.call(action.value),
+    return SizedBox(
+      height: 80,
+      child: hasContent
+          ? Padding(
+              padding: const EdgeInsets.fromLTRB(0, 8, 0, 12),
+              child: Row(
+                children: [
+                  for (final action in actions)
+                    Expanded(
+                      child: _ActionItem(
+                        label: action.label,
+                        icon: _resolveIcon(action.icon, action.value),
+                        destructive: action.destructive,
+                        onTap: () => onAction?.call(action.value),
+                      ),
+                    ),
+                  if (onDismiss != null)
+                    Expanded(
+                      child: _ActionItem(
+                        label: 'Dismiss',
+                        icon: LucideIcons.xCircle,
+                        onTap: onDismiss,
+                      ),
+                    ),
+                  if (onNext != null)
+                    Expanded(
+                      child: _ActionItem(
+                        label: 'Next',
+                        icon: LucideIcons.arrowRight,
+                        onTap: onNext,
+                      ),
+                    ),
+                ],
               ),
-            ),
-          if (onNext != null)
-            Expanded(
-              child: _ActionItem(
-                label: 'Next',
-                icon: LucideIcons.arrowRight,
-                onTap: onNext,
-              ),
-            ),
-        ],
-      ),
+            )
+          : null,
     );
   }
 

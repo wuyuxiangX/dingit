@@ -25,6 +25,7 @@ type createRequest struct {
 	Body        string                     `json:"body" binding:"required"`
 	Source      string                     `json:"source"`
 	Priority    string                     `json:"priority"`
+	Icon        *string                    `json:"icon"`
 	Actions     []model.NotificationAction `json:"actions"`
 	CallbackURL *string                    `json:"callback_url"`
 	Metadata    map[string]any             `json:"metadata"`
@@ -55,6 +56,7 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 		Body:        req.Body,
 		Source:      source,
 		Priority:    priority,
+		Icon:        req.Icon,
 		Actions:     req.Actions,
 		CallbackURL: req.CallbackURL,
 		Metadata:    req.Metadata,
