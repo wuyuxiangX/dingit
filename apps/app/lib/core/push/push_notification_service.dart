@@ -34,7 +34,7 @@ class PushNotificationService {
       return;
     }
 
-    // Wait for APNs token (iOS requires this before FCM token)
+    // Wait for APNs token (iOS)
     String? apnsToken;
     for (var i = 0; i < 10; i++) {
       apnsToken = await _messaging.getAPNSToken();
@@ -44,44 +44,24 @@ class PushNotificationService {
     debugPrint('[Push] APNs token: ${apnsToken != null ? "obtained" : "null after retries"}');
 
     if (apnsToken == null) {
-      debugPrint('[Push] APNs token unavailable, FCM registration skipped');
+      debugPrint('[Push] APNs token unavailable, push registration skipped');
       return;
     }
 
-    // Get FCM token
-    _deviceToken = await _messaging.getToken();
-    debugPrint('[Push] FCM token: ${_deviceToken?.substring(0, 20)}...');
+    // Register APNs token directly with server (no FCM needed)
+    _deviceToken = apnsToken;
+    debugPrint('[Push] Registering APNs token with server...');
+    await _registerDevice(apnsToken);
 
-    if (_deviceToken != null) {
-      await _registerDevice(_deviceToken!);
-    }
-
-    // Listen for token refresh
-    _messaging.onTokenRefresh.listen((newToken) {
-      debugPrint('[Push] Token refreshed');
-      _deviceToken = newToken;
-      _registerDevice(newToken);
-    });
-
-    // Foreground message handling
+    // Foreground message handling (for FCM messages if VPN is on)
     FirebaseMessaging.onMessage.listen((message) {
       debugPrint('[Push] Foreground message: ${message.notification?.title}');
-      // Foreground notifications are already handled via WebSocket
-      // No need to show local notification since app is in foreground
     });
 
     // When user taps notification (app was in background)
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
       debugPrint('[Push] Opened from background: ${message.data}');
-      // TODO: Navigate to notification detail page
     });
-
-    // Check if app was opened from a terminated state via notification
-    final initialMessage = await _messaging.getInitialMessage();
-    if (initialMessage != null) {
-      debugPrint('[Push] Opened from terminated: ${initialMessage.data}');
-      // TODO: Navigate to notification detail page
-    }
   }
 
   Future<void> _registerDevice(String token) async {

@@ -64,17 +64,37 @@ func main() {
 	apiKeySvc := service.NewAPIKeyService(pool)
 	deviceSvc := service.NewDeviceService(pool)
 
-	// Push notification service (optional — requires GOOGLE_APPLICATION_CREDENTIALS)
-	var pushSvc *service.PushService
+	// Push notification services
+	var apnsSvc *service.ApnsService
+	if keyFile := os.Getenv("APNS_KEY_FILE"); keyFile != "" {
+		apnsCfg := service.ApnsConfig{
+			KeyFile:  keyFile,
+			KeyID:    os.Getenv("APNS_KEY_ID"),
+			TeamID:   os.Getenv("APNS_TEAM_ID"),
+			BundleID: "com.notifyhub.notifyApp",
+			Sandbox:  os.Getenv("APNS_ENV") != "production",
+		}
+		var err error
+		apnsSvc, err = service.NewApnsService(apnsCfg, deviceSvc)
+		if err != nil {
+			logger.Warn("APNs push disabled", zap.Error(err))
+		} else {
+			logger.Info("APNs push enabled", zap.String("key_id", apnsCfg.KeyID))
+		}
+	}
+
+	var fcmSvc *service.FcmService
 	if projectID := os.Getenv("FCM_PROJECT_ID"); projectID != "" {
 		var err error
-		pushSvc, err = service.NewPushService(projectID, deviceSvc)
+		fcmSvc, err = service.NewFcmService(projectID, deviceSvc)
 		if err != nil {
-			logger.Warn("FCM push disabled — credentials not found", zap.Error(err))
+			logger.Warn("FCM push disabled", zap.Error(err))
 		} else {
 			logger.Info("FCM push enabled", zap.String("project_id", projectID))
 		}
 	}
+
+	pushRouter := service.NewPushRouter(apnsSvc, fcmSvc)
 
 	// Seed API key from env if provided
 	if err := apiKeySvc.SeedFromEnv(ctx, cfg.APIKey); err != nil {
@@ -126,7 +146,7 @@ func main() {
 	defer hub.Close()
 
 	// Handlers
-	notificationHandler := handler.NewNotificationHandler(store, hub, callbackSvc, pushSvc)
+	notificationHandler := handler.NewNotificationHandler(store, hub, callbackSvc, pushRouter)
 	healthHandler := handler.NewHealthHandler(store, hub)
 	wsHandler := handler.NewWsHandler(store, hub)
 	deviceHandler := handler.NewDeviceHandler(deviceSvc)

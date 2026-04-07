@@ -16,11 +16,11 @@ type NotificationHandler struct {
 	store       *service.Store
 	hub         *ws.Hub
 	callbackSvc *service.CallbackService
-	pushSvc     *service.PushService
+	pushRouter  *service.PushRouter
 }
 
-func NewNotificationHandler(store *service.Store, hub *ws.Hub, callbackSvc *service.CallbackService, pushSvc *service.PushService) *NotificationHandler {
-	return &NotificationHandler{store: store, hub: hub, callbackSvc: callbackSvc, pushSvc: pushSvc}
+func NewNotificationHandler(store *service.Store, hub *ws.Hub, callbackSvc *service.CallbackService, pushRouter *service.PushRouter) *NotificationHandler {
+	return &NotificationHandler{store: store, hub: hub, callbackSvc: callbackSvc, pushRouter: pushRouter}
 }
 
 type createRequest struct {
@@ -74,9 +74,7 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 	h.hub.Broadcast(model.NewNotificationNewMsg(created))
 
 	// Send push notification to all registered devices
-	if h.pushSvc != nil {
-		go h.pushSvc.SendToAll(context.Background(), created)
-	}
+	h.pushRouter.SendToAll(context.Background(), created)
 
 	response.Created(c, gin.H{
 		"id":        created.ID,

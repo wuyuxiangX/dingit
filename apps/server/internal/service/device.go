@@ -41,7 +41,18 @@ func (s *DeviceService) Register(ctx context.Context, token, platform string) (*
 }
 
 func (s *DeviceService) ListTokens(ctx context.Context) ([]string, error) {
-	rows, err := s.pool.Query(ctx, "SELECT token FROM devices")
+	return s.ListByPlatform(ctx, "")
+}
+
+func (s *DeviceService) ListByPlatform(ctx context.Context, platform string) ([]string, error) {
+	query := "SELECT token FROM devices"
+	var args []any
+	if platform != "" {
+		query += " WHERE platform = $1"
+		args = append(args, platform)
+	}
+
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

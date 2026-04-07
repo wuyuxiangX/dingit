@@ -1,0 +1,204 @@
+package service
+
+import (
+	"context"
+	"crypto/ecdsa"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"sync"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
+
+	"github.com/dingit-me/server/internal/model"
+	"github.com/dingit-me/server/internal/pkg/logger"
+)
+
+type ApnsConfig struct {
+	KeyFile string // path to .p8 file
+	KeyID   string // e.g. BJKWPYLDG8
+	TeamID  string // e.g. 2TT58G759N
+	BundleID string // e.g. com.notifyhub.notifyApp
+	Sandbox bool   // true for development
+}
+
+type ApnsService struct {
+	cfg       ApnsConfig
+	key       *ecdsa.PrivateKey
+	deviceSvc *DeviceService
+	client    *http.Client
+
+	mu       sync.Mutex
+	jwtToken string
+	jwtExp   time.Time
+}
+
+func NewApnsService(cfg ApnsConfig, deviceSvc *DeviceService) (*ApnsService, error) {
+	keyData, err := os.ReadFile(cfg.KeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("read APNs key: %w", err)
+	}
+
+	block, _ := pem.Decode(keyData)
+	if block == nil {
+		return nil, fmt.Errorf("invalid PEM block in APNs key")
+	}
+
+	parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse APNs key: %w", err)
+	}
+
+	ecKey, ok := parsedKey.(*ecdsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("APNs key is not ECDSA")
+	}
+
+	return &ApnsService{
+		cfg:       cfg,
+		key:       ecKey,
+		deviceSvc: deviceSvc,
+		client: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+	}, nil
+}
+
+func (s *ApnsService) getJWT() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// APNs JWT is valid for up to 1 hour, refresh at 50 min
+	if s.jwtToken != "" && time.Now().Before(s.jwtExp) {
+		return s.jwtToken, nil
+	}
+
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"iss": s.cfg.TeamID,
+		"iat": now.Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token.Header["kid"] = s.cfg.KeyID
+
+	signed, err := token.SignedString(s.key)
+	if err != nil {
+		return "", fmt.Errorf("sign JWT: %w", err)
+	}
+
+	s.jwtToken = signed
+	s.jwtExp = now.Add(50 * time.Minute)
+	return signed, nil
+}
+
+func (s *ApnsService) baseURL() string {
+	if s.cfg.Sandbox {
+		return "https://api.sandbox.push.apple.com"
+	}
+	return "https://api.push.apple.com"
+}
+
+// SendToAll sends push notification to all iOS devices via APNs
+func (s *ApnsService) SendToAll(ctx context.Context, n *model.Notification) {
+	devices, err := s.deviceSvc.ListByPlatform(ctx, "ios")
+	if err != nil {
+		logger.Error("Failed to list iOS device tokens", zap.Error(err))
+		return
+	}
+
+	if len(devices) == 0 {
+		return
+	}
+
+	logger.Info("Sending APNs push", zap.Int("devices", len(devices)), zap.String("title", n.Title))
+
+	for _, token := range devices {
+		go s.sendToDevice(ctx, token, n)
+	}
+}
+
+func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *model.Notification) {
+	jwtToken, err := s.getJWT()
+	if err != nil {
+		logger.Error("Failed to get APNs JWT", zap.Error(err))
+		return
+	}
+
+	payload := map[string]any{
+		"aps": map[string]any{
+			"alert": map[string]string{
+				"title": n.Title,
+				"body":  n.Body,
+			},
+			"sound": "default",
+			"badge": 1,
+		},
+		"notification_id": n.ID,
+		"source":          n.Source,
+		"priority":        string(n.Priority),
+	}
+
+	body, _ := json.Marshal(payload)
+	url := fmt.Sprintf("%s/3/device/%s", s.baseURL(), deviceToken)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, io.NopCloser(
+		io.Reader(jsonReader(body)),
+	))
+	if err != nil {
+		logger.Error("Failed to create APNs request", zap.Error(err))
+		return
+	}
+
+	req.Header.Set("Authorization", "bearer "+jwtToken)
+	req.Header.Set("apns-topic", s.cfg.BundleID)
+	req.Header.Set("apns-push-type", "alert")
+	req.Header.Set("apns-priority", "10")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		logger.Error("APNs request failed", zap.Error(err))
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		logger.Info("APNs push sent", zap.String("device", deviceToken[:20]+"..."))
+		return
+	}
+
+	respBody, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == 410 {
+		// Token is no longer valid — remove device
+		logger.Info("Removing expired APNs token", zap.String("device", deviceToken[:20]+"..."))
+		_ = s.deviceSvc.RemoveByToken(ctx, deviceToken)
+		return
+	}
+
+	logger.Error("APNs error",
+		zap.Int("status", resp.StatusCode),
+		zap.String("body", string(respBody)),
+	)
+}
+
+type byteReader struct{ data []byte; off int }
+
+func (r *byteReader) Read(p []byte) (int, error) {
+	if r.off >= len(r.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, r.data[r.off:])
+	r.off += n
+	return n, nil
+}
+
+func jsonReader(data []byte) io.Reader {
+	return &byteReader{data: data}
+}
