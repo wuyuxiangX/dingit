@@ -77,6 +77,7 @@ class _NotificationHistoryPageState
         centerTitle: true,
       ),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // -- Filter chips --
           SingleChildScrollView(
