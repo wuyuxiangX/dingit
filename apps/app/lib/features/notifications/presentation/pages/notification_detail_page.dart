@@ -11,15 +11,22 @@ import '../../providers/notifications_provider.dart';
 
 class NotificationDetailPage extends ConsumerWidget {
   final String notificationId;
+  final NotificationModel? notification;
 
-  const NotificationDetailPage({super.key, required this.notificationId});
+  const NotificationDetailPage({
+    super.key,
+    required this.notificationId,
+    this.notification,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Prefer passed notification (from history), fallback to in-memory list
     final notifications = ref.watch(notificationsProvider);
-    final notification = notifications
-        .cast<NotificationModel?>()
-        .firstWhere((n) => n?.id == notificationId, orElse: () => null);
+    final notification = this.notification ??
+        notifications
+            .cast<NotificationModel?>()
+            .firstWhere((n) => n?.id == notificationId, orElse: () => null);
 
     if (notification == null) {
       return Scaffold(

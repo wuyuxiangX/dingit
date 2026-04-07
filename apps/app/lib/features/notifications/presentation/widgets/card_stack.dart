@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
@@ -148,6 +149,17 @@ class _CardStackState extends State<CardStack>
             Text(
               "You're all caught up",
               style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: () => context.push('/history'),
+              child: Text(
+                'View history',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
             ),
           ],
         ),

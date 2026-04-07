@@ -3,12 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
 import '../../../core/api/api_client.dart';
-import '../../../core/env/env_config.dart';
 import '../../../core/websocket/ws_client.dart';
 import '../../settings/providers/settings_provider.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient(baseUrl: EnvConfig.apiUrl, apiKey: EnvConfig.apiKey);
+  final settings = ref.watch(settingsProvider);
+  return ApiClient(baseUrl: settings.serverUrl, apiKey: settings.apiKey);
 });
 
 final wsClientProvider = Provider<WsClient>((ref) {

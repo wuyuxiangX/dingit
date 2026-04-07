@@ -60,34 +60,55 @@ func (c *Client) Send(req *SendRequest) (*SendResponse, error) {
 	return &result, nil
 }
 
-func (c *Client) List(status string, limit int) ([]map[string]interface{}, int, error) {
+type ListResult struct {
+	Items      []map[string]interface{}
+	Total      int
+	Page       int
+	TotalPages int
+}
+
+func (c *Client) List(status, priority string, page, pageSize int) (*ListResult, error) {
 	u, _ := url.Parse(c.BaseURL + "/api/notifications")
 	q := u.Query()
 	if status != "" {
 		q.Set("status", status)
 	}
-	q.Set("limit", fmt.Sprintf("%d", limit))
+	if priority != "" {
+		q.Set("priority", priority)
+	}
+	q.Set("page", fmt.Sprintf("%d", page))
+	q.Set("page_size", fmt.Sprintf("%d", pageSize))
 	u.RawQuery = q.Encode()
 
 	resp, err := c.doRequest("GET", u.String(), nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
-		return nil, 0, fmt.Errorf("server error (%d): %s", resp.StatusCode, string(data))
+		return nil, fmt.Errorf("server error (%d): %s", resp.StatusCode, string(data))
 	}
 
-	var result struct {
-		Notifications []map[string]interface{} `json:"notifications"`
-		Total         int                      `json:"total"`
+	var envelope struct {
+		Code int `json:"code"`
+		Data struct {
+			Items      []map[string]interface{} `json:"items"`
+			Total      int                      `json:"total"`
+			Page       int                      `json:"page"`
+			TotalPages int                      `json:"total_pages"`
+		} `json:"data"`
 	}
-	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, 0, err
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return nil, err
 	}
-	return result.Notifications, result.Total, nil
+	return &ListResult{
+		Items:      envelope.Data.Items,
+		Total:      envelope.Data.Total,
+		Page:       envelope.Data.Page,
+		TotalPages: envelope.Data.TotalPages,
+	}, nil
 }
 
 func (c *Client) Get(id string) (map[string]interface{}, error) {

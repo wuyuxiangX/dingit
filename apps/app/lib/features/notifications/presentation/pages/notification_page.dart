@@ -63,13 +63,10 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
                   const Spacer(),
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      ref.read(wsClientProvider).disconnect();
-                      ref.read(wsClientProvider).connect();
-                    },
+                    onTap: () => context.push('/history'),
                     child: Padding(
                       padding: const EdgeInsets.all(8),
-                      child: Icon(LucideIcons.refreshCw, size: 18, color: AppColors.ink),
+                      child: Icon(LucideIcons.history, size: 20, color: AppColors.ink),
                     ),
                   ),
                 ],
