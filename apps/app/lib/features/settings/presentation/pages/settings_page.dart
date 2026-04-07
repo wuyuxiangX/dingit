@@ -56,6 +56,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       final settings = ref.read(settingsProvider);
       _serverUrlController.text = settings.serverUrl;
       _apiKeyController.text = settings.apiKey;
+      if (settings.serverUrl.isNotEmpty) {
+        _testConnection();
+      }
     });
   }
 
@@ -105,25 +108,28 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final serverUrl = _serverUrlController.text.trim();
     final apiKey = _apiKeyController.text.trim();
 
-    await ref.read(settingsProvider.notifier).saveAll(
-          serverUrl: serverUrl,
-          apiKey: apiKey,
+    try {
+      await ref.read(settingsProvider.notifier).saveAll(
+            serverUrl: serverUrl,
+            apiKey: apiKey,
+          );
+
+      final wsClient = ref.read(wsClientProvider);
+      final settings = ref.read(settingsProvider);
+      await wsClient.reconnectWithUrl(settings.wsUrl, newApiKey: settings.apiKey);
+
+      if (mounted) context.pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Save failed: $e', style: _label().copyWith(color: AppColors.paper)),
+            backgroundColor: AppColors.destructive,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
         );
-
-    final wsClient = ref.read(wsClientProvider);
-    final settings = ref.read(settingsProvider);
-    await wsClient.reconnectWithUrl(settings.wsUrl, newApiKey: settings.apiKey);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Settings saved', style: _label().copyWith(color: AppColors.paper)),
-          backgroundColor: AppColors.ink,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      }
     }
   }
 
