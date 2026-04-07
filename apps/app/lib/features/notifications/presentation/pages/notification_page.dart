@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/websocket/ws_client.dart';
+import '../../../settings/providers/settings_provider.dart';
 import '../../providers/notifications_provider.dart';
 import '../widgets/action_bar.dart';
 import '../widgets/card_stack.dart';
@@ -22,8 +23,20 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(wsClientProvider).connect();
-      ref.read(pushServiceProvider).initialize();
+      _initPushWhenReady();
     });
+  }
+
+  Future<void> _initPushWhenReady() async {
+    // Wait for settings to be loaded before initializing push
+    for (var i = 0; i < 20; i++) {
+      final settings = ref.read(settingsProvider);
+      if (settings.isLoaded && settings.serverUrl.isNotEmpty) {
+        ref.read(pushServiceProvider).initialize();
+        return;
+      }
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
   }
 
   @override

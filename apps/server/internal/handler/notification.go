@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/dingit-me/server/internal/model"
@@ -73,7 +75,7 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 
 	// Send push notification to all registered devices
 	if h.pushSvc != nil {
-		go h.pushSvc.SendToAll(c.Request.Context(), created)
+		go h.pushSvc.SendToAll(context.Background(), created)
 	}
 
 	response.Created(c, gin.H{
