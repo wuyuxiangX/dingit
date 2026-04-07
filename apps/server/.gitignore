@@ -1,1 +1,3 @@
 bin/
+configs/firebase-service-account.json
+configs/AuthKey_*.p8
