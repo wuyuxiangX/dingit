@@ -79,11 +79,10 @@ class _NotificationHistoryPageState
       body: Column(
         children: [
           // -- Filter chips --
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Row(
               children: [
                 for (final entry in _filters.entries)
                   Padding(
@@ -99,8 +98,6 @@ class _NotificationHistoryPageState
               ],
             ),
           ),
-
-          const SizedBox(height: 8),
 
           // -- List --
           Expanded(child: _buildBody(state, theme)),
@@ -208,7 +205,7 @@ class _FilterChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           color: selected ? AppColors.ink : AppColors.surface,
           borderRadius: BorderRadius.circular(20),
@@ -228,6 +225,7 @@ class _FilterChip extends StatelessWidget {
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: selected ? AppColors.paper : AppColors.inkMuted,
+            height: 1.0,
           ),
         ),
       ),
