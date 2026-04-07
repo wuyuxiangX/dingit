@@ -71,7 +71,7 @@ func main() {
 			KeyFile:  keyFile,
 			KeyID:    os.Getenv("APNS_KEY_ID"),
 			TeamID:   os.Getenv("APNS_TEAM_ID"),
-			BundleID: "com.notifyhub.notifyApp",
+			BundleID: envOrDefault("APNS_BUNDLE_ID", "com.notifyhub.notifyApp"),
 			Sandbox:  os.Getenv("APNS_ENV") != "production",
 		}
 		var err error
@@ -112,7 +112,7 @@ func main() {
 			logger.Fatal("Failed to save API key", zap.Error(err))
 		}
 		logger.Info("No API keys found. Generated initial key",
-			zap.String("key", rawKey),
+			zap.String("key_prefix", rawKey[:15]+"..."),
 		)
 		logger.Warn("Save this key — it will not be shown again")
 	}
@@ -212,4 +212,11 @@ func main() {
 		logger.Fatal("Server forced to shutdown", zap.Error(err))
 	}
 	logger.Info("Server stopped")
+}
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }

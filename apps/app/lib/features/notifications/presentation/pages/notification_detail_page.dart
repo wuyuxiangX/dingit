@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
 import '../../../../app/theme/app_colors.dart';
+import '../../../../core/utils/date_formatter.dart';
+import '../../../../core/utils/icon_resolver.dart';
 import '../../providers/notifications_provider.dart';
 
 class NotificationDetailPage extends ConsumerWidget {
@@ -75,7 +76,7 @@ class NotificationDetailPage extends ConsumerWidget {
                   children: [
                     if (notification.icon case final icon?
                         when icon.isNotEmpty) ...[
-                      Icon(_resolveIcon(icon), size: 15, color: AppColors.accent),
+                      Icon(resolveNotificationIcon(icon), size: 15, color: AppColors.accent),
                       const SizedBox(width: 6),
                     ],
                     if (notification.source.isNotEmpty)
@@ -176,22 +177,6 @@ class NotificationDetailPage extends ConsumerWidget {
     );
   }
 
-  static const _iconMap = <String, IconData>{
-    'github': LucideIcons.github,
-    'slack': LucideIcons.messageSquare,
-    'mail': LucideIcons.mail,
-    'alert': LucideIcons.alertTriangle,
-    'check': LucideIcons.checkCircle2,
-    'deploy': LucideIcons.rocket,
-    'ci': LucideIcons.activity,
-    'server': LucideIcons.server,
-    'database': LucideIcons.database,
-    'bug': LucideIcons.bug,
-  };
-
-  static IconData _resolveIcon(String iconName) {
-    return _iconMap[iconName.toLowerCase().trim()] ?? LucideIcons.bell;
-  }
 }
 
 // -- Status chip --
@@ -273,7 +258,7 @@ class _TimestampRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context).textTheme;
-    final created = _formatFull(notification.timestamp);
+    final created = formatFullDate(notification.timestamp);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,7 +277,7 @@ class _TimestampRow extends StatelessWidget {
               Icon(LucideIcons.checkCircle2, size: 13, color: AppColors.success),
               const SizedBox(width: 6),
               Text(
-                'Actioned ${_formatFull(actionedAt)}',
+                'Actioned ${formatFullDate(actionedAt)}',
                 style: theme.bodyMedium?.copyWith(color: AppColors.success),
               ),
             ],
@@ -302,9 +287,6 @@ class _TimestampRow extends StatelessWidget {
     );
   }
 
-  String _formatFull(DateTime date) {
-    return DateFormat('MMM d, yyyy  HH:mm').format(date.toLocal());
-  }
 }
 
 // -- Metadata section --

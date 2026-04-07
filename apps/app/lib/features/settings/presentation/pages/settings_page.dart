@@ -83,19 +83,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       final client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 5);
 
-      final request = await client.getUrl(uri);
-      if (apiKey.isNotEmpty) {
-        request.headers.set('X-API-Key', apiKey);
-      }
-      final response = await request.close();
-      client.close();
+      try {
+        final request = await client.getUrl(uri);
+        if (apiKey.isNotEmpty) {
+          request.headers.set('Authorization', 'Bearer $apiKey');
+        }
+        final response = await request.close();
 
-      if (response.statusCode == 200) {
-        setState(() => _testResult = const _TestResult.success());
-      } else {
-        setState(
-          () => _testResult = _TestResult.failure('HTTP ${response.statusCode}'),
-        );
+        if (response.statusCode == 200) {
+          setState(() => _testResult = const _TestResult.success());
+        } else {
+          setState(
+            () => _testResult = _TestResult.failure('HTTP ${response.statusCode}'),
+          );
+        }
+      } finally {
+        client.close();
       }
     } catch (e) {
       setState(() => _testResult = _TestResult.failure(e.toString()));

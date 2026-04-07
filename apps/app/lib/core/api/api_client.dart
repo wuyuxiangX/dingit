@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:dingit_shared/dingit_shared.dart';
 
@@ -72,19 +71,13 @@ class ApiClient {
 
   Future<void> patchNotificationStatus(String id, String status) async {
     final url = Uri.parse('$baseUrl/api/notifications/$id');
-    try {
-      final response = await _client.patch(
-        url,
-        headers: _headers,
-        body: jsonEncode({'status': status}),
-      );
-      if (response.statusCode != 200) {
-        debugPrint(
-          '[ApiClient] PATCH $url failed: ${response.statusCode} ${response.body}',
-        );
-      }
-    } catch (e) {
-      debugPrint('[ApiClient] PATCH $url error: $e');
+    final response = await _client.patch(
+      url,
+      headers: _headers,
+      body: jsonEncode({'status': status}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('PATCH $url failed: ${response.statusCode}');
     }
   }
 

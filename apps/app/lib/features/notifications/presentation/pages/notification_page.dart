@@ -18,25 +18,20 @@ class NotificationPage extends ConsumerStatefulWidget {
 }
 
 class _NotificationPageState extends ConsumerState<NotificationPage> {
+  bool _pushInitialized = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(wsClientProvider).connect();
-      _initPushWhenReady();
+      ref.listenManual(settingsProvider, (prev, next) {
+        if (!_pushInitialized && next.isLoaded && next.serverUrl.isNotEmpty) {
+          _pushInitialized = true;
+          ref.read(pushServiceProvider).initialize();
+        }
+      }, fireImmediately: true);
     });
-  }
-
-  Future<void> _initPushWhenReady() async {
-    // Wait for settings to be loaded before initializing push
-    for (var i = 0; i < 20; i++) {
-      final settings = ref.read(settingsProvider);
-      if (settings.isLoaded && settings.serverUrl.isNotEmpty) {
-        ref.read(pushServiceProvider).initialize();
-        return;
-      }
-      await Future.delayed(const Duration(milliseconds: 500));
-    }
   }
 
   @override

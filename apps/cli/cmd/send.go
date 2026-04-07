@@ -95,8 +95,14 @@ func runSend(cmd *cobra.Command, args []string) error {
 }
 
 func pollForResponse(c *client.Client, id string) error {
+	timeout := time.After(5 * time.Minute)
 	for {
-		time.Sleep(2 * time.Second)
+		select {
+		case <-timeout:
+			return fmt.Errorf("timed out waiting for response after 5 minutes")
+		case <-time.After(2 * time.Second):
+		}
+
 		data, err := c.Get(id)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Poll error: %v\n", err)
@@ -109,9 +115,10 @@ func pollForResponse(c *client.Client, id string) error {
 			action, _ := data["actioned_value"].(string)
 			fmt.Printf("Response received: %s\n", action)
 			return nil
-		case "dismissed", "expired":
-			fmt.Printf("Notification %s\n", status)
-			os.Exit(1)
+		case "dismissed":
+			return fmt.Errorf("notification was dismissed")
+		case "expired":
+			return fmt.Errorf("notification expired")
 		}
 	}
 }

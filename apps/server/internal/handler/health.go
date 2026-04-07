@@ -27,10 +27,15 @@ func NewHealthHandler(store *service.Store, hub *ws.Hub) *HealthHandler {
 
 func (h *HealthHandler) Health(c *gin.Context) {
 	pending := model.StatusPending
-	count, _ := h.store.Count(c.Request.Context(), &pending, nil)
+	count, err := h.store.Count(c.Request.Context(), &pending, nil)
+
+	status := "ok"
+	if err != nil {
+		status = "degraded"
+	}
 
 	response.Success(c, gin.H{
-		"status":                "ok",
+		"status":                status,
 		"uptime_seconds":        int(time.Since(h.startTime).Seconds()),
 		"connected_clients":     h.hub.ConnectedClients(),
 		"pending_notifications": count,

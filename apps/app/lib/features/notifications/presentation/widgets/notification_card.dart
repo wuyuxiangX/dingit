@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
 import '../../../../app/theme/app_colors.dart';
+import '../../../../core/utils/date_formatter.dart';
+import '../../../../core/utils/icon_resolver.dart';
 
 class NotificationCard extends StatelessWidget {
   final NotificationModel notification;
@@ -37,7 +37,7 @@ class NotificationCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              _formatDate(notification.timestamp),
+              formatRelativeDate(notification.timestamp),
               style: theme.labelMedium?.copyWith(color: AppColors.inkMuted),
             ),
           ),
@@ -49,7 +49,7 @@ class NotificationCard extends StatelessWidget {
               children: [
                 if (notification.icon case final icon? when icon.isNotEmpty) ...[
                   Icon(
-                    _resolveIcon(icon),
+                    resolveNotificationIcon(icon),
                     size: 16,
                     color: AppColors.accent,
                   ),
@@ -104,32 +104,4 @@ class NotificationCard extends StatelessWidget {
     );
   }
 
-  static const _iconMap = <String, IconData>{
-    'github': LucideIcons.github,
-    'slack': LucideIcons.messageSquare,
-    'mail': LucideIcons.mail,
-    'alert': LucideIcons.alertTriangle,
-    'check': LucideIcons.checkCircle2,
-    'deploy': LucideIcons.rocket,
-    'ci': LucideIcons.activity,
-    'server': LucideIcons.server,
-    'database': LucideIcons.database,
-    'bug': LucideIcons.bug,
-  };
-
-  IconData _resolveIcon(String iconName) {
-    return _iconMap[iconName.toLowerCase().trim()] ?? LucideIcons.bell;
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final dateDay = DateTime(date.year, date.month, date.day);
-    final diff = today.difference(dateDay).inDays;
-
-    if (diff == 0) return 'Today';
-    if (diff == 1) return 'Yesterday';
-    if (diff < 7) return DateFormat('EEEE').format(date);
-    return DateFormat('MMM d').format(date);
-  }
 }

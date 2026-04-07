@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/x509"
@@ -148,9 +149,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 	body, _ := json.Marshal(payload)
 	url := fmt.Sprintf("%s/3/device/%s", s.baseURL(), deviceToken)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, io.NopCloser(
-		io.Reader(jsonReader(body)),
-	))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		logger.Error("Failed to create APNs request", zap.Error(err))
 		return
@@ -169,7 +168,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 200 {
-		logger.Info("APNs push sent", zap.String("device", deviceToken[:20]+"..."))
+		logger.Info("APNs push sent", zap.String("device", truncateToken(deviceToken)))
 		return
 	}
 
@@ -177,7 +176,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 
 	if resp.StatusCode == 410 {
 		// Token is no longer valid — remove device
-		logger.Info("Removing expired APNs token", zap.String("device", deviceToken[:20]+"..."))
+		logger.Info("Removing expired APNs token", zap.String("device", truncateToken(deviceToken)))
 		_ = s.deviceSvc.RemoveByToken(ctx, deviceToken)
 		return
 	}
@@ -188,17 +187,9 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 	)
 }
 
-type byteReader struct{ data []byte; off int }
-
-func (r *byteReader) Read(p []byte) (int, error) {
-	if r.off >= len(r.data) {
-		return 0, io.EOF
+func truncateToken(s string) string {
+	if len(s) <= 20 {
+		return s
 	}
-	n := copy(p, r.data[r.off:])
-	r.off += n
-	return n, nil
-}
-
-func jsonReader(data []byte) io.Reader {
-	return &byteReader{data: data}
+	return s[:20] + "..."
 }

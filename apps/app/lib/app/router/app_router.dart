@@ -16,7 +16,7 @@ final appRouter = GoRouter(
       path: '/notification/:id',
       builder: (context, state) {
         final id = state.pathParameters['id']!;
-        final extra = state.extra as NotificationModel?;
+        final extra = state.extra is NotificationModel ? state.extra as NotificationModel : null;
         return NotificationDetailPage(notificationId: id, notification: extra);
       },
     ),

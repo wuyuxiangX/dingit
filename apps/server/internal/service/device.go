@@ -40,10 +40,6 @@ func (s *DeviceService) Register(ctx context.Context, token, platform string) (*
 	return &d, nil
 }
 
-func (s *DeviceService) ListTokens(ctx context.Context) ([]string, error) {
-	return s.ListByPlatform(ctx, "")
-}
-
 func (s *DeviceService) ListByPlatform(ctx context.Context, platform string) ([]string, error) {
 	query := "SELECT token FROM devices"
 	var args []any

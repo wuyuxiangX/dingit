@@ -7,7 +7,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
+
+	"go.uber.org/zap"
+
+	"github.com/dingit-me/server/internal/pkg/logger"
 	"time"
 
 	"github.com/google/uuid"
@@ -80,7 +83,7 @@ func (s *APIKeyService) ValidateKey(ctx context.Context, rawKey string) (*model.
 		defer cancel()
 		_, err := s.pool.Exec(bgCtx, `UPDATE api_keys SET last_used_at = $1 WHERE id = $2`, time.Now().UTC(), ak.ID)
 		if err != nil {
-			log.Printf("[APIKey] Failed to update last_used_at: %v", err)
+			logger.Error("Failed to update last_used_at", zap.Error(err))
 		}
 	}()
 
@@ -116,7 +119,7 @@ func (s *APIKeyService) SeedFromEnv(ctx context.Context, rawKey string) error {
 	if err != nil {
 		return fmt.Errorf("seed api key: %w", err)
 	}
-	log.Println("[APIKey] Seeded API key from DINGIT_API_KEY environment variable")
+	logger.Info("Seeded API key from DINGIT_API_KEY environment variable")
 	return nil
 }
 

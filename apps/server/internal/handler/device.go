@@ -20,6 +20,8 @@ type registerDeviceRequest struct {
 	Platform string `json:"platform"`
 }
 
+var validPlatforms = map[string]bool{"ios": true, "android": true}
+
 func (h *DeviceHandler) Register(c *gin.Context) {
 	var req registerDeviceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -27,9 +29,18 @@ func (h *DeviceHandler) Register(c *gin.Context) {
 		return
 	}
 
+	if len(req.Token) > 256 || len(req.Token) < 10 {
+		response.BadRequest(c, response.CodeBadRequest, "invalid token length")
+		return
+	}
+
 	platform := req.Platform
 	if platform == "" {
 		platform = "ios"
+	}
+	if !validPlatforms[platform] {
+		response.BadRequest(c, response.CodeBadRequest, "invalid platform, must be ios or android")
+		return
 	}
 
 	device, err := h.deviceSvc.Register(c.Request.Context(), req.Token, platform)

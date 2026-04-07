@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
 import '../../../../app/theme/app_colors.dart';
+import '../../../../core/utils/date_formatter.dart';
 import '../../providers/history_provider.dart';
 
 class NotificationHistoryPage extends ConsumerStatefulWidget {
@@ -170,8 +170,7 @@ class _NotificationHistoryPageState
 
           final notification = state.items[index];
           final isFirst = index == 0;
-          final isLast =
-              index == state.items.length - 1 || state.isLoadingMore && index == state.items.length - 1;
+          final isLast = index == state.items.length - 1;
 
           return _HistoryTile(
             notification: notification,
@@ -330,7 +329,7 @@ class _HistoryTile extends StatelessWidget {
                                 const SizedBox(width: 8),
                               ],
                               Text(
-                                _formatRelative(notification.timestamp),
+                                formatRelativeTime(notification.timestamp),
                                 style: theme.labelSmall,
                               ),
                               if (notification.priority != 'normal') ...[
@@ -392,14 +391,4 @@ class _HistoryTile extends StatelessWidget {
     };
   }
 
-  String _formatRelative(DateTime date) {
-    final now = DateTime.now();
-    final diff = now.difference(date);
-
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return DateFormat('MMM d').format(date);
-  }
 }

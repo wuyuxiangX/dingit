@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type Client struct {
@@ -19,7 +20,7 @@ func New(baseURL, apiKey string) *Client {
 	return &Client{
 		BaseURL:    baseURL,
 		APIKey:     apiKey,
-		httpClient: &http.Client{},
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -41,7 +42,10 @@ type SendResponse struct {
 }
 
 func (c *Client) Send(req *SendRequest) (*SendResponse, error) {
-	body, _ := json.Marshal(req)
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
 	resp, err := c.doRequest("POST", c.BaseURL+"/api/notifications", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("connection failed: %w", err)
@@ -68,7 +72,10 @@ type ListResult struct {
 }
 
 func (c *Client) List(status, priority string, page, pageSize int) (*ListResult, error) {
-	u, _ := url.Parse(c.BaseURL + "/api/notifications")
+	u, err := url.Parse(c.BaseURL + "/api/notifications")
+	if err != nil {
+		return nil, fmt.Errorf("invalid server URL: %w", err)
+	}
 	q := u.Query()
 	if status != "" {
 		q.Set("status", status)
