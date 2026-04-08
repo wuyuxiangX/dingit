@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/storage/notification_cache.dart';
 import 'notifications_provider.dart';
 
 class HistoryState {
@@ -55,10 +56,22 @@ final historyProvider =
     NotifierProvider<HistoryNotifier, HistoryState>(HistoryNotifier.new);
 
 class HistoryNotifier extends Notifier<HistoryState> {
+  NotificationCache get _cache => ref.read(notificationCacheProvider);
+
   @override
-  HistoryState build() => const HistoryState();
+  HistoryState build() {
+    _loadFromCache();
+    return const HistoryState();
+  }
 
   ApiClient get _api => ref.read(apiClientProvider);
+
+  Future<void> _loadFromCache() async {
+    final cached = await _cache.loadHistory();
+    if (cached.isNotEmpty && state.items.isEmpty) {
+      state = state.copyWith(items: cached);
+    }
+  }
 
   Future<void> fetch({String? status}) async {
     state = state.copyWith(
@@ -80,6 +93,7 @@ class HistoryNotifier extends Notifier<HistoryState> {
         totalPages: result.totalPages,
         isLoading: false,
       );
+      _cache.saveHistory(result.items);
     } catch (e) {
       debugPrint('[History] fetch error: $e');
       state = state.copyWith(
@@ -108,6 +122,7 @@ class HistoryNotifier extends Notifier<HistoryState> {
         totalPages: result.totalPages,
         isLoadingMore: false,
       );
+      _cache.saveHistory(state.items);
     } catch (e) {
       debugPrint('[History] loadMore error: $e');
       state = state.copyWith(isLoadingMore: false);

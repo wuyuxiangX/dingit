@@ -1,11 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/push/push_notification_service.dart';
+import '../../../core/storage/notification_cache.dart';
 import '../../../core/websocket/ws_client.dart';
 import '../../settings/providers/settings_provider.dart';
+
+final notificationCacheProvider = Provider<NotificationCache>((ref) {
+  return NotificationCache();
+});
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   final settings = ref.watch(settingsProvider);
@@ -39,8 +46,29 @@ final notificationsProvider =
 );
 
 class NotificationsNotifier extends Notifier<List<NotificationModel>> {
+  NotificationCache get _cache => ref.read(notificationCacheProvider);
+
   @override
-  List<NotificationModel> build() => [];
+  List<NotificationModel> build() {
+    _loadFromCache();
+    return [];
+  }
+
+  Future<void> _loadFromCache() async {
+    final cached = await _cache.loadNotifications();
+    if (cached.isNotEmpty && state.isEmpty) {
+      state = cached;
+    }
+  }
+
+  Timer? _debounce;
+
+  void _persistCache() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      _cache.saveNotifications(state);
+    });
+  }
 
   void handleWsMessage(WsMessage message) {
     switch (message) {
@@ -53,8 +81,9 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
           return n.id == notification.id ? notification : n;
         }).toList();
       default:
-        break;
+        return; // skip cache write for unknown messages
     }
+    _persistCache();
   }
 
   void respondToNotification(String id, String actionValue) {
@@ -78,11 +107,13 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
       }
       return n;
     }).toList();
+    _persistCache();
   }
 
   void dismissNotification(String id) {
     final previous = state;
     state = state.where((n) => n.id != id).toList();
+    _persistCache();
     _dismissOnServer(id, previous);
   }
 
@@ -93,6 +124,7 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
     } catch (e) {
       debugPrint('[Notifications] Dismiss sync failed: $e');
       state = previous;
+      _persistCache();
     }
   }
 }
