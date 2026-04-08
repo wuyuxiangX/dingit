@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -32,6 +33,8 @@ type createRequest struct {
 	Actions     []model.NotificationAction `json:"actions"`
 	CallbackURL *string                    `json:"callback_url"`
 	Metadata    map[string]any             `json:"metadata"`
+	TTL         *int                       `json:"ttl"`
+	ExpiresAt   *string                    `json:"expires_at"`
 }
 
 func (h *NotificationHandler) Create(c *gin.Context) {
@@ -54,6 +57,29 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 		return
 	}
 
+	var expiresAt *time.Time
+	if req.TTL != nil {
+		if *req.TTL < 0 {
+			response.BadRequest(c, response.CodeBadRequest, "TTL must be a positive number of seconds")
+			return
+		}
+		if *req.TTL > 0 {
+			t := time.Now().UTC().Add(time.Duration(*req.TTL) * time.Second)
+			expiresAt = &t
+		}
+	} else if req.ExpiresAt != nil && *req.ExpiresAt != "" {
+		t, err := time.Parse(time.RFC3339, *req.ExpiresAt)
+		if err != nil {
+			response.BadRequest(c, response.CodeBadRequest, "Invalid expires_at format, use RFC3339")
+			return
+		}
+		if t.Before(time.Now()) {
+			response.BadRequest(c, response.CodeBadRequest, "expires_at must be in the future")
+			return
+		}
+		expiresAt = &t
+	}
+
 	n := &model.Notification{
 		Title:       req.Title,
 		Body:        req.Body,
@@ -63,6 +89,7 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 		Actions:     req.Actions,
 		CallbackURL: req.CallbackURL,
 		Metadata:    req.Metadata,
+		ExpiresAt:   expiresAt,
 	}
 
 	created, err := h.store.Add(c.Request.Context(), n)

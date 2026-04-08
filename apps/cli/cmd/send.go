@@ -29,6 +29,7 @@ func init() {
 	sendCmd.Flags().StringP("priority", "p", "normal", "Notification priority (urgent/high/normal/low)")
 	sendCmd.Flags().String("icon", "", "Icon name or URL for the notification source")
 	sendCmd.Flags().BoolP("wait", "w", false, "Wait for user response (blocks)")
+	sendCmd.Flags().Int("ttl", 0, "Notification TTL in seconds (0 = no expiry)")
 
 	_ = sendCmd.MarkFlagRequired("title")
 	_ = sendCmd.MarkFlagRequired("body")
@@ -71,8 +72,10 @@ func runSend(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	ttl, _ := cmd.Flags().GetInt("ttl")
+
 	c := newClient()
-	result, err := c.Send(&client.SendRequest{
+	req := &client.SendRequest{
 		Title:       title,
 		Body:        body,
 		Source:      source,
@@ -80,7 +83,11 @@ func runSend(cmd *cobra.Command, args []string) error {
 		Icon:        icon,
 		Actions:     actions,
 		CallbackURL: callback,
-	})
+	}
+	if ttl > 0 {
+		req.TTL = &ttl
+	}
+	result, err := c.Send(req)
 	if err != nil {
 		return err
 	}

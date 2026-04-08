@@ -52,6 +52,9 @@ func migrate(ctx context.Context, pool *pgxpool.Pool) error {
 
 	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS icon TEXT;
 
+	CREATE INDEX IF NOT EXISTS idx_notifications_expires ON notifications(expires_at)
+		WHERE expires_at IS NOT NULL AND status = 'pending';
+
 	CREATE TABLE IF NOT EXISTS api_keys (
 		id           TEXT PRIMARY KEY,
 		name         TEXT NOT NULL DEFAULT '',

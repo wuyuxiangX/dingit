@@ -33,6 +33,7 @@ type SendRequest struct {
 	Actions     []map[string]interface{} `json:"actions,omitempty"`
 	CallbackURL string                   `json:"callback_url,omitempty"`
 	Metadata    map[string]interface{}   `json:"metadata,omitempty"`
+	TTL         *int                     `json:"ttl,omitempty"`
 }
 
 type SendResponse struct {

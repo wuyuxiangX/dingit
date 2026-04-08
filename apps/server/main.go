@@ -49,8 +49,9 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// Connect to PostgreSQL
-	ctx := context.Background()
+	// App-wide context, cancelled on shutdown
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	defer ctxCancel()
 	pool, err := db.Connect(ctx, cfg.Database.URL)
 	if err != nil {
 		logger.Fatal("Failed to connect to database", zap.Error(err))
@@ -145,6 +146,10 @@ func main() {
 	})
 	defer hub.Close()
 
+	// Expiry service
+	expirySvc := service.NewExpiryService(store, hub, 60*time.Second)
+	go expirySvc.Start(ctx)
+
 	// Handlers
 	notificationHandler := handler.NewNotificationHandler(store, hub, callbackSvc, pushRouter)
 	healthHandler := handler.NewHealthHandler(store, hub)
@@ -205,6 +210,7 @@ func main() {
 	<-quit
 
 	logger.Info("Shutting down server...")
+	ctxCancel() // stop expiry service before closing hub
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

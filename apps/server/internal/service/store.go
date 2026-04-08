@@ -50,9 +50,9 @@ func (s *Store) Add(ctx context.Context, n *model.Notification) (*model.Notifica
 	}
 
 	_, err = s.pool.Exec(ctx, `
-		INSERT INTO notifications (id, title, body, source, status, priority, icon, actions, callback_url, metadata, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-	`, n.ID, n.Title, n.Body, n.Source, n.Status, n.Priority, n.Icon, actionsJSON, n.CallbackURL, metadataJSON, n.Timestamp)
+		INSERT INTO notifications (id, title, body, source, status, priority, icon, actions, callback_url, metadata, created_at, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+	`, n.ID, n.Title, n.Body, n.Source, n.Status, n.Priority, n.Icon, actionsJSON, n.CallbackURL, metadataJSON, n.Timestamp, n.ExpiresAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert notification: %w", err)
 	}
@@ -76,16 +76,9 @@ func (s *Store) List(ctx context.Context, status *model.NotificationStatus, prio
 	}
 	defer rows.Close()
 
-	var result []model.Notification
-	for rows.Next() {
-		n, err := scanNotification(rows)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, *n)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate notifications: %w", err)
+	result, err := scanMany(rows)
+	if err != nil {
+		return nil, err
 	}
 	if result == nil {
 		result = []model.Notification{}
@@ -149,6 +142,19 @@ func (s *Store) Delete(ctx context.Context, id string) (bool, error) {
 	return tag.RowsAffected() > 0, nil
 }
 
+func (s *Store) ExpireOverdue(ctx context.Context) ([]model.Notification, error) {
+	rows, err := s.pool.Query(ctx, `
+		UPDATE notifications SET status = 'expired'
+		WHERE status = 'pending' AND expires_at IS NOT NULL AND expires_at <= NOW()
+		RETURNING `+notificationColumns)
+	if err != nil {
+		return nil, fmt.Errorf("expire overdue: %w", err)
+	}
+	defer rows.Close()
+
+	return scanMany(rows)
+}
+
 func (s *Store) scanOne(ctx context.Context, query string, args ...any) (*model.Notification, error) {
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -163,6 +169,21 @@ func (s *Store) scanOne(ctx context.Context, query string, args ...any) (*model.
 		return nil, nil
 	}
 	return scanNotification(rows)
+}
+
+func scanMany(rows pgx.Rows) ([]model.Notification, error) {
+	var result []model.Notification
+	for rows.Next() {
+		n, err := scanNotification(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate rows: %w", err)
+	}
+	return result, nil
 }
 
 func scanNotification(rows pgx.Rows) (*model.Notification, error) {
