@@ -27,6 +27,12 @@ pubspec.lock
 # Generated
 *.mocks.dart
 
+# Flutter generated platform files
+apps/app/macos/Flutter/GeneratedPluginRegistrant.swift
+apps/app/macos/Podfile.lock
+apps/app/windows/flutter/generated_plugin_registrant.cc
+apps/app/windows/flutter/generated_plugins.cmake
+
 # Go binaries
 apps/cli/dingit
 apps/cli/notify
