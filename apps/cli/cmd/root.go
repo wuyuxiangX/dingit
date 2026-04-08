@@ -11,6 +11,7 @@ import (
 
 var serverURL string
 var apiKeyFlag string
+var jsonOutput bool
 
 var rootCmd = &cobra.Command{
 	Use:   "dingit",
@@ -27,6 +28,7 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "Server URL override")
 	rootCmd.PersistentFlags().StringVar(&apiKeyFlag, "api-key", "", "API key override")
+	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 }
 
 func newClient() *client.Client {

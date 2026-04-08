@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -38,6 +40,15 @@ func runList(cmd *cobra.Command, args []string) error {
 	result, err := c.List(status, priority, page, pageSize)
 	if err != nil {
 		return err
+	}
+
+	if jsonOutput {
+		return json.NewEncoder(os.Stdout).Encode(map[string]any{
+			"items":       result.Items,
+			"total":       result.Total,
+			"page":        result.Page,
+			"total_pages": result.TotalPages,
+		})
 	}
 
 	if len(result.Items) == 0 {

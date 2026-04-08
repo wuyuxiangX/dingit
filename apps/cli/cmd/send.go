@@ -92,6 +92,10 @@ func runSend(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if jsonOutput {
+		return json.NewEncoder(os.Stdout).Encode(result)
+	}
+
 	fmt.Printf("Notification sent: %s\n", result.ID)
 
 	if wait {

@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -24,6 +26,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+		if jsonOutput {
+			return json.NewEncoder(os.Stdout).Encode(data)
+		}
 		fmt.Printf("Notification: %s\n", data["id"])
 		fmt.Printf("  Title:  %s\n", data["title"])
 		fmt.Printf("  Status: %s\n", data["status"])
@@ -37,6 +42,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	health, err := c.Health()
 	if err != nil {
 		return err
+	}
+	if jsonOutput {
+		return json.NewEncoder(os.Stdout).Encode(health)
 	}
 	fmt.Printf("Server Status: %s\n", health["status"])
 	fmt.Printf("  Uptime: %.0fs\n", health["uptime_seconds"])
