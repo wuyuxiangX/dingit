@@ -22,7 +22,9 @@ class WsClient {
 
   final connectionState = ValueNotifier(WsConnectionState.disconnected);
 
-  WsClient({required this.url, this.apiKey, required this.onMessage});
+  DateTime? lastSyncAt;
+
+  WsClient({required this.url, this.apiKey, required this.onMessage, this.lastSyncAt});
 
   /// Disconnect and reconnect with a new URL and/or API key.
   Future<void> reconnectWithUrl(String newUrl, {String? newApiKey}) async {
@@ -38,7 +40,13 @@ class WsClient {
     connectionState.value = WsConnectionState.connecting;
 
     try {
-      final uri = Uri.parse(url);
+      var uri = Uri.parse(url);
+      if (lastSyncAt != null) {
+        uri = uri.replace(queryParameters: {
+          ...uri.queryParameters,
+          'since': lastSyncAt!.toUtc().toIso8601String(),
+        });
+      }
       final headers = <String, dynamic>{};
       if (apiKey != null && apiKey!.isNotEmpty) {
         headers['X-API-Key'] = apiKey;

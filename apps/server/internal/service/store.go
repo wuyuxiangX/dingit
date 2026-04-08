@@ -155,6 +155,27 @@ func (s *Store) ExpireOverdue(ctx context.Context) ([]model.Notification, error)
 	return scanMany(rows)
 }
 
+func (s *Store) ListSince(ctx context.Context, since time.Time, limit int) ([]model.Notification, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT `+notificationColumns+` FROM notifications
+		WHERE created_at > $1
+		ORDER BY created_at ASC
+		LIMIT $2`, since, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list since: %w", err)
+	}
+	defer rows.Close()
+
+	result, err := scanMany(rows)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		result = []model.Notification{}
+	}
+	return result, nil
+}
+
 func (s *Store) scanOne(ctx context.Context, query string, args ...any) (*model.Notification, error) {
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {

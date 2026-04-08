@@ -26,6 +26,7 @@ final wsClientProvider = Provider<WsClient>((ref) {
     url: settings.wsUrl,
     apiKey: settings.apiKey,
     onMessage: notifier.handleWsMessage,
+    lastSyncAt: notifier._lastSyncAt,
   );
   ref.onDispose(() => client.disconnect());
   return client;
@@ -47,6 +48,7 @@ final notificationsProvider =
 
 class NotificationsNotifier extends Notifier<List<NotificationModel>> {
   NotificationCache get _cache => ref.read(notificationCacheProvider);
+  DateTime? _lastSyncAt;
 
   @override
   List<NotificationModel> build() {
@@ -55,7 +57,13 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
   }
 
   Future<void> _loadFromCache() async {
-    final cached = await _cache.loadNotifications();
+    final results = await Future.wait([
+      _cache.loadNotifications(),
+      _cache.loadLastSyncAt(),
+    ]);
+    final cached = results[0] as List<NotificationModel>;
+    _lastSyncAt = results[1] as DateTime?;
+
     if (cached.isNotEmpty && state.isEmpty) {
       state = cached;
     }
@@ -73,7 +81,27 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
   void handleWsMessage(WsMessage message) {
     switch (message) {
       case WsSyncFull(:final notifications):
-        state = notifications;
+        if (_lastSyncAt != null && state.isNotEmpty) {
+          // Reconnect with since: merge new data into existing state
+          final existingIds = {for (final n in state) n.id};
+          final merged = [...state];
+          for (final n in notifications) {
+            if (existingIds.contains(n.id)) {
+              // Update existing notification with latest state
+              final idx = merged.indexWhere((e) => e.id == n.id);
+              if (idx >= 0) merged[idx] = n;
+            } else {
+              merged.add(n);
+            }
+          }
+          merged.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          state = merged;
+        } else {
+          // First connect: replace entirely
+          state = notifications;
+        }
+        _lastSyncAt = DateTime.now().toUtc();
+        _cache.saveLastSyncAt(_lastSyncAt!);
       case WsNotificationNew(:final notification):
         state = [notification, ...state];
       case WsNotificationUpdated(:final notification):

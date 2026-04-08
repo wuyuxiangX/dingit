@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -35,11 +36,28 @@ func (h *WsHandler) Handle(c *gin.Context) {
 
 	logger.Info("New WebSocket client connected", zap.String("ip", c.ClientIP()))
 
-	pending := model.StatusPending
-	notifications, err := h.store.List(c.Request.Context(), &pending, nil, 1000, 0)
-	if err != nil {
-		logger.Error("Failed to load pending notifications", zap.Error(err))
-		notifications = []model.Notification{}
+	var notifications []model.Notification
+
+	// If client provides "since" param, send all notifications since that time
+	if sinceStr := c.Query("since"); sinceStr != "" {
+		since, err := time.Parse(time.RFC3339, sinceStr)
+		if err == nil {
+			notifications, err = h.store.ListSince(c.Request.Context(), since, 1000)
+			if err != nil {
+				logger.Error("Failed to load notifications since", zap.Error(err))
+				notifications = []model.Notification{}
+			}
+		}
+	}
+
+	// Default: send all pending notifications (backward compatible)
+	if notifications == nil {
+		pending := model.StatusPending
+		notifications, err = h.store.List(c.Request.Context(), &pending, nil, 1000, 0)
+		if err != nil {
+			logger.Error("Failed to load pending notifications", zap.Error(err))
+			notifications = []model.Notification{}
+		}
 	}
 
 	h.hub.AddClient(conn, notifications)
