@@ -13,3 +13,6 @@ logger:
 cors:
   allowed_origins:
     - "*"
+
+rate_limit:
+  enabled: false

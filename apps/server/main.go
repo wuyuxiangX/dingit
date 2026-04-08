@@ -171,6 +171,15 @@ func main() {
 		"/ws":     true,
 	}))
 
+	// Rate limiting (after auth, so api_key_id is available)
+	if cfg.RateLimit.Enabled {
+		r.Use(middleware.RateLimit(cfg.RateLimit))
+		logger.Info("Rate limiting enabled",
+			zap.Float64("rps", cfg.RateLimit.RequestsPerSec),
+			zap.Int("burst", cfg.RateLimit.BurstSize),
+		)
+	}
+
 	// Routes
 	r.GET("/health", healthHandler.Health)
 	r.GET("/ws", wsHandler.Handle)

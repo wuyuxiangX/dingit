@@ -12,3 +12,8 @@ logger:
 cors:
   allowed_origins:
     - "*"
+
+rate_limit:
+  enabled: true
+  requests_per_second: 10
+  burst_size: 20

@@ -9,12 +9,19 @@ import (
 )
 
 type Config struct {
-	App      AppConfig      `mapstructure:"app"`
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Logger   LoggerConfig   `mapstructure:"logger"`
-	CORS     CORSConfig     `mapstructure:"cors"`
-	APIKey   string         `mapstructure:"api_key"`
+	App       AppConfig       `mapstructure:"app"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	Logger    LoggerConfig    `mapstructure:"logger"`
+	CORS      CORSConfig      `mapstructure:"cors"`
+	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
+	APIKey    string          `mapstructure:"api_key"`
+}
+
+type RateLimitConfig struct {
+	Enabled        bool    `mapstructure:"enabled"`
+	RequestsPerSec float64 `mapstructure:"requests_per_second"`
+	BurstSize      int     `mapstructure:"burst_size"`
 }
 
 type AppConfig struct {
@@ -63,6 +70,9 @@ func Load() (*Config, error) {
 	v.SetDefault("logger.level", "info")
 	v.SetDefault("logger.format", "console")
 	v.SetDefault("cors.allowed_origins", []string{"*"})
+	v.SetDefault("rate_limit.enabled", true)
+	v.SetDefault("rate_limit.requests_per_second", 10.0)
+	v.SetDefault("rate_limit.burst_size", 20)
 
 	// Read config file
 	v.SetConfigName(env)
@@ -85,6 +95,9 @@ func Load() (*Config, error) {
 	_ = v.BindEnv("database.url", "DATABASE_URL")
 	_ = v.BindEnv("app.env", "APP_ENV")
 	_ = v.BindEnv("api_key", "DINGIT_API_KEY")
+	_ = v.BindEnv("rate_limit.enabled", "RATE_LIMIT_ENABLED")
+	_ = v.BindEnv("rate_limit.requests_per_second", "RATE_LIMIT_RPS")
+	_ = v.BindEnv("rate_limit.burst_size", "RATE_LIMIT_BURST")
 
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
