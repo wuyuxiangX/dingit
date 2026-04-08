@@ -1,0 +1,14 @@
+app:
+  name: dingit
+  env: production
+
+server:
+  port: 8080
+
+logger:
+  level: info
+  format: json
+
+cors:
+  allowed_origins:
+    - "*"

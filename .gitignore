@@ -43,3 +43,5 @@ apps/server/dingit-server
 
 # Config
 .dingit.yaml
+.env
+secrets/

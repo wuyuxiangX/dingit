@@ -1,0 +1,12 @@
+bin/
+tmp/
+*.md
+.git
+.gitignore
+.dockerignore
+Dockerfile
+Makefile
+.air.toml
+configs/AuthKey_*.p8
+configs/firebase-service-account.json
+configs/local.yaml
