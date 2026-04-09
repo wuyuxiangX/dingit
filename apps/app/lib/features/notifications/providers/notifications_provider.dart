@@ -49,9 +49,14 @@ final notificationsProvider =
 class NotificationsNotifier extends Notifier<List<NotificationModel>> {
   NotificationCache get _cache => ref.read(notificationCacheProvider);
   DateTime? _lastSyncAt;
+  bool _mounted = true;
 
   @override
   List<NotificationModel> build() {
+    ref.onDispose(() {
+      _mounted = false;
+      _debounce?.cancel();
+    });
     _loadFromCache();
     return [];
   }
@@ -61,6 +66,7 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
       _cache.loadNotifications(),
       _cache.loadLastSyncAt(),
     ]);
+    if (!_mounted) return;
     final cached = results[0] as List<NotificationModel>;
     _lastSyncAt = results[1] as DateTime?;
 
@@ -79,6 +85,7 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
   }
 
   void handleWsMessage(WsMessage message) {
+    if (!_mounted) return;
     switch (message) {
       case WsSyncFull(:final notifications):
         if (_lastSyncAt != null && state.isNotEmpty) {
@@ -151,6 +158,7 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
       await api.patchNotificationStatus(id, 'dismissed');
     } catch (e) {
       debugPrint('[Notifications] Dismiss sync failed: $e');
+      if (!_mounted) return;
       state = previous;
       _persistCache();
     }

@@ -20,48 +20,52 @@ class PushNotificationService {
   String? get deviceToken => _deviceToken;
 
   Future<void> initialize() async {
-    // Request permission
-    final settings = await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-    debugPrint('[Push] Permission: ${settings.authorizationStatus}');
+    try {
+      // Request permission
+      final settings = await _messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      debugPrint('[Push] Permission: ${settings.authorizationStatus}');
 
-    if (settings.authorizationStatus != AuthorizationStatus.authorized &&
-        settings.authorizationStatus != AuthorizationStatus.provisional) {
-      debugPrint('[Push] Permission denied');
-      return;
+      if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+          settings.authorizationStatus != AuthorizationStatus.provisional) {
+        debugPrint('[Push] Permission denied');
+        return;
+      }
+
+      // Wait for APNs token (iOS)
+      String? apnsToken;
+      for (var i = 0; i < 10; i++) {
+        apnsToken = await _messaging.getAPNSToken();
+        if (apnsToken != null) break;
+        await Future.delayed(const Duration(seconds: 1));
+      }
+      debugPrint('[Push] APNs token: ${apnsToken != null ? "obtained" : "null after retries"}');
+
+      if (apnsToken == null) {
+        debugPrint('[Push] APNs token unavailable, push registration skipped');
+        return;
+      }
+
+      // Register APNs token directly with server (no FCM needed)
+      _deviceToken = apnsToken;
+      debugPrint('[Push] Registering APNs token with server...');
+      await _registerDevice(apnsToken);
+
+      // Foreground message handling (for FCM messages if VPN is on)
+      FirebaseMessaging.onMessage.listen((message) {
+        debugPrint('[Push] Foreground message: ${message.notification?.title}');
+      });
+
+      // When user taps notification (app was in background)
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        debugPrint('[Push] Opened from background: ${message.data}');
+      });
+    } catch (e) {
+      debugPrint('[Push] Initialization failed: $e');
     }
-
-    // Wait for APNs token (iOS)
-    String? apnsToken;
-    for (var i = 0; i < 10; i++) {
-      apnsToken = await _messaging.getAPNSToken();
-      if (apnsToken != null) break;
-      await Future.delayed(const Duration(seconds: 1));
-    }
-    debugPrint('[Push] APNs token: ${apnsToken != null ? "obtained" : "null after retries"}');
-
-    if (apnsToken == null) {
-      debugPrint('[Push] APNs token unavailable, push registration skipped');
-      return;
-    }
-
-    // Register APNs token directly with server (no FCM needed)
-    _deviceToken = apnsToken;
-    debugPrint('[Push] Registering APNs token with server...');
-    await _registerDevice(apnsToken);
-
-    // Foreground message handling (for FCM messages if VPN is on)
-    FirebaseMessaging.onMessage.listen((message) {
-      debugPrint('[Push] Foreground message: ${message.notification?.title}');
-    });
-
-    // When user taps notification (app was in background)
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      debugPrint('[Push] Opened from background: ${message.data}');
-    });
   }
 
   Future<void> _registerDevice(String token) async {

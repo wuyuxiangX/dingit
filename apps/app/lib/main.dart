@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -17,6 +18,18 @@ void main() async {
 
   await Firebase.initializeApp();
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  // Catch synchronous Flutter framework errors (build/layout/render)
+  FlutterError.onError = (details) {
+    debugPrint('[App] FlutterError: ${details.exception}');
+    FlutterError.presentError(details);
+  };
+
+  // Catch platform-level errors (e.g. native plugin crashes)
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('[App] PlatformError: $error');
+    return true; // prevent crash
+  };
 
   // Catch unhandled async errors to prevent crashes when offline
   runZonedGuarded(
