@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,6 +22,7 @@ class NotificationPage extends ConsumerStatefulWidget {
 
 class _NotificationPageState extends ConsumerState<NotificationPage> {
   bool _pushInitialized = false;
+  StreamSubscription<String>? _errorSub;
 
   @override
   void initState() {
@@ -31,6 +34,26 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
       // authoritative value (what the user actually sees in the card stack).
       final pendingNow = ref.read(pendingNotificationsProvider).length;
       BadgeService.setCount(pendingNow);
+
+      // Surface commit failures from the notifications notifier as a red
+      // snackbar so the user knows something went wrong instead of silently
+      // watching the card pop back.
+      _errorSub = ref
+          .read(notificationsProvider.notifier)
+          .errorStream
+          .listen((msg) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..removeCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(msg),
+              backgroundColor: AppColors.destructive,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+      });
+
       ref.listenManual(settingsProvider, (prev, next) {
         if (!_pushInitialized && next.isLoaded && next.serverUrl.isNotEmpty) {
           _pushInitialized = true;
@@ -41,12 +64,37 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
   }
 
   @override
+  void dispose() {
+    _errorSub?.cancel();
+    super.dispose();
+  }
+
+  void _dismissWithUndo(String id) {
+    final notifier = ref.read(notificationsProvider.notifier);
+    notifier.dismissNotification(id);
+    ScaffoldMessenger.of(context)
+      ..removeCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('已取消'),
+          // Must match NotificationsNotifier._commitDelay so the snackbar
+          // disappears just as the commit fires.
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: '撤销',
+            onPressed: () => notifier.undoDismiss(id),
+          ),
+        ),
+      );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final pending = ref.watch(pendingNotificationsProvider);
     final topNotification = pending.isNotEmpty ? pending.first : null;
     final notifier = ref.read(notificationsProvider.notifier);
 
-    void dismissTop() => notifier.dismissNotification(topNotification!.id);
+    void dismissTop() => _dismissWithUndo(topNotification!.id);
 
     return Scaffold(
       body: SafeArea(
@@ -97,7 +145,7 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
                   notifier.respondToNotification(notification.id, action);
                 },
                 onDismiss: (notification) {
-                  notifier.dismissNotification(notification.id);
+                  _dismissWithUndo(notification.id);
                 },
                 onTap: (notification) {
                   context.push('/notification/${notification.id}');

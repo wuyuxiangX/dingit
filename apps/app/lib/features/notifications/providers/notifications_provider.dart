@@ -52,11 +52,30 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
   DateTime? _lastSyncAt;
   bool _mounted = true;
 
+  // Delayed-commit state: a dismiss is stored locally as
+  // NotificationStatus.dismissed immediately, then actually PATCHed to the
+  // server after this many seconds. During the window, the user can undo it.
+  static const _commitDelay = Duration(seconds: 4);
+
+  final Map<String, Timer> _pendingCommits = {};
+  final Map<String, _Snapshot> _preCommit = {};
+  final Set<String> _inFlightDismiss = {};
+  final _errorController = StreamController<String>.broadcast();
+
+  /// UI-facing stream of human-readable error messages for failed commits.
+  Stream<String> get errorStream => _errorController.stream;
+
   @override
   List<NotificationModel> build() {
     ref.onDispose(() {
       _mounted = false;
       _debounce?.cancel();
+      for (final t in _pendingCommits.values) {
+        t.cancel();
+      }
+      _pendingCommits.clear();
+      _preCommit.clear();
+      _errorController.close();
     });
     _loadFromCache();
     return [];
@@ -134,51 +153,173 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
     _syncBadge();
   }
 
+  /// Respond to a notification with an action value (e.g. "approve").
+  ///
+  /// Optimistically updates local state to actioned, sends the action over
+  /// WebSocket (for realtime broadcast), and also sends an HTTP PATCH as a
+  /// reliable fallback. On failure, rolls back just this notification and
+  /// surfaces a human-readable error on [errorStream].
   void respondToNotification(String id, String actionValue) {
-    final wsClient = ref.read(wsClientProvider);
-    final response = ActionResponse(
-      notificationId: id,
-      action: actionValue,
-      timestamp: DateTime.now().toUtc(),
+    final current = _findById(id);
+    if (current == null) return;
+
+    _preCommit[id] = _Snapshot(
+      status: current.status,
+      actionedValue: current.actionedValue,
+      actionedAt: current.actionedAt,
     );
 
-    wsClient.send(WsMessage.actionResponse(response: response));
-
-    // Optimistically update local state
+    // Optimistic local update
     state = state.map((n) {
-      if (n.id == id) {
-        return n.copyWith(
-          status: NotificationStatus.actioned,
-          actionedValue: actionValue,
-          actionedAt: DateTime.now().toUtc(),
-        );
-      }
-      return n;
+      if (n.id != id) return n;
+      return n.copyWith(
+        status: NotificationStatus.actioned,
+        actionedValue: actionValue,
+        actionedAt: DateTime.now().toUtc(),
+      );
+    }).toList();
+    _persistCache();
+    _syncBadge();
+
+    // WS for realtime broadcast (other clients see the change immediately)
+    final wsClient = ref.read(wsClientProvider);
+    wsClient.send(WsMessage.actionResponse(
+      response: ActionResponse(
+        notificationId: id,
+        action: actionValue,
+        timestamp: DateTime.now().toUtc(),
+      ),
+    ));
+
+    // HTTP as the authoritative, retryable source of truth
+    _commitAction(id, actionValue);
+  }
+
+  Future<void> _commitAction(String id, String actionValue) async {
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.patchNotificationStatus(
+        id,
+        'actioned',
+        actionedValue: actionValue,
+      );
+      _preCommit.remove(id);
+    } catch (e) {
+      debugPrint('[Notifications] Action commit failed: $e');
+      if (!_mounted) return;
+      final snap = _preCommit.remove(id);
+      if (snap != null) _rollbackOne(id, snap);
+      _errorController.add('操作失败：${_humanError(e)}');
+    }
+  }
+
+  /// Dismiss a notification with delayed commit + undo support.
+  ///
+  /// The notification is immediately marked as dismissed locally (so the
+  /// pending-card stack hides it) and a [_commitDelay] timer is armed. If
+  /// [undoDismiss] is called before the timer fires, the notification is
+  /// restored to its prior status without ever hitting the server. If the
+  /// timer fires, the PATCH is sent; failures trigger a precise single-row
+  /// rollback and a user-facing error.
+  void dismissNotification(String id) {
+    final current = _findById(id);
+    if (current == null) return;
+
+    // Save snapshot for undo / rollback
+    _preCommit[id] = _Snapshot(
+      status: current.status,
+      actionedValue: current.actionedValue,
+      actionedAt: current.actionedAt,
+    );
+
+    // Soft delete: set status to dismissed. pendingNotificationsProvider
+    // filters these out, so the UI hides the card instantly.
+    state = state.map((n) {
+      if (n.id != id) return n;
+      return n.copyWith(status: NotificationStatus.dismissed);
+    }).toList();
+    _persistCache();
+    _syncBadge();
+
+    // Replace any existing pending timer for this id (idempotent repeat)
+    _pendingCommits[id]?.cancel();
+    _pendingCommits[id] = Timer(_commitDelay, () {
+      _commitDismiss(id);
+    });
+  }
+
+  /// Cancel a pending dismiss and restore the notification to its original
+  /// status. Safe to call any time before the delay elapses; a no-op if the
+  /// dismiss has already committed.
+  void undoDismiss(String id) {
+    _pendingCommits[id]?.cancel();
+    _pendingCommits.remove(id);
+    final snap = _preCommit.remove(id);
+    if (snap == null) return;
+    _rollbackOne(id, snap);
+  }
+
+  Future<void> _commitDismiss(String id) async {
+    _pendingCommits.remove(id);
+    if (_inFlightDismiss.contains(id)) return; // dedup concurrent commits
+    _inFlightDismiss.add(id);
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.patchNotificationStatus(id, 'dismissed');
+      _preCommit.remove(id);
+    } catch (e) {
+      debugPrint('[Notifications] Dismiss commit failed: $e');
+      if (!_mounted) return;
+      final snap = _preCommit.remove(id);
+      if (snap != null) _rollbackOne(id, snap);
+      _errorController.add('取消失败：${_humanError(e)}');
+    } finally {
+      _inFlightDismiss.remove(id);
+    }
+  }
+
+  /// Precisely restore a single notification to a prior snapshot, without
+  /// touching any other entries in state (unlike a full `state = previous`
+  /// rollback which could clobber intervening edits).
+  void _rollbackOne(String id, _Snapshot snap) {
+    state = state.map((n) {
+      if (n.id != id) return n;
+      return n.copyWith(
+        status: snap.status,
+        actionedValue: snap.actionedValue,
+        actionedAt: snap.actionedAt,
+      );
     }).toList();
     _persistCache();
     _syncBadge();
   }
 
-  void dismissNotification(String id) {
-    final previous = state;
-    state = state.where((n) => n.id != id).toList();
-    _persistCache();
-    _syncBadge();
-    _dismissOnServer(id, previous);
+  String _humanError(Object e) {
+    final msg = e.toString();
+    if (msg.contains('TimeoutException')) return '请求超时';
+    if (msg.contains('SocketException')) return '无法连接服务器';
+    return '请重试';
   }
 
-  Future<void> _dismissOnServer(String id, List<NotificationModel> previous) async {
-    try {
-      final api = ref.read(apiClientProvider);
-      await api.patchNotificationStatus(id, 'dismissed');
-    } catch (e) {
-      debugPrint('[Notifications] Dismiss sync failed: $e');
-      if (!_mounted) return;
-      state = previous;
-      _persistCache();
-      _syncBadge();
+  NotificationModel? _findById(String id) {
+    for (final n in state) {
+      if (n.id == id) return n;
     }
+    return null;
   }
+}
+
+/// Lightweight snapshot used to roll back a notification's status fields
+/// after a failed optimistic update.
+class _Snapshot {
+  final NotificationStatus status;
+  final String? actionedValue;
+  final DateTime? actionedAt;
+  _Snapshot({
+    required this.status,
+    this.actionedValue,
+    this.actionedAt,
+  });
 }
 
 final pendingNotificationsProvider = Provider<List<NotificationModel>>((ref) {

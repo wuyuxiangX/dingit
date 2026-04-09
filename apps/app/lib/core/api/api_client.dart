@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -69,15 +70,34 @@ class ApiClient {
     );
   }
 
-  Future<void> patchNotificationStatus(String id, String status) async {
+  Future<void> patchNotificationStatus(
+    String id,
+    String status, {
+    String? actionedValue,
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
     final url = Uri.parse('$baseUrl/api/notifications/$id');
-    final response = await _client.patch(
-      url,
-      headers: _headers,
-      body: jsonEncode({'status': status}),
-    );
+    final body = <String, dynamic>{'status': status};
+    if (actionedValue != null) body['actioned_value'] = actionedValue;
+
+    final http.Response response;
+    try {
+      response = await _client
+          .patch(url, headers: _headers, body: jsonEncode(body))
+          .timeout(timeout);
+    } on TimeoutException {
+      throw Exception('TimeoutException: request timed out');
+    }
+
     if (response.statusCode != 200) {
-      throw Exception('PATCH $url failed: ${response.statusCode}');
+      String msg = 'HTTP ${response.statusCode}';
+      try {
+        final parsed = jsonDecode(response.body) as Map<String, dynamic>;
+        if (parsed['message'] is String) msg = parsed['message'] as String;
+      } catch (_) {
+        // response body is not JSON; stick with HTTP status string
+      }
+      throw Exception('PATCH failed: $msg');
     }
   }
 
