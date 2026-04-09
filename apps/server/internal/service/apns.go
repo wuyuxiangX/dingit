@@ -187,6 +187,79 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 	)
 }
 
+// SendSilentBadgeUpdate sends a background (silent) APNs push to refresh badge
+// on all iOS devices without showing any alert. Used when pending count changes
+// due to dismiss/action on any device.
+func (s *ApnsService) SendSilentBadgeUpdate(ctx context.Context, badgeCount int) {
+	devices, err := s.deviceSvc.ListByPlatform(ctx, "ios")
+	if err != nil {
+		logger.Error("Failed to list iOS tokens for badge update", zap.Error(err))
+		return
+	}
+	if len(devices) == 0 {
+		return
+	}
+
+	logger.Info("Sending silent badge update", zap.Int("devices", len(devices)), zap.Int("badge", badgeCount))
+
+	for _, token := range devices {
+		go s.sendSilentBadge(ctx, token, badgeCount)
+	}
+}
+
+func (s *ApnsService) sendSilentBadge(ctx context.Context, deviceToken string, badgeCount int) {
+	jwtToken, err := s.getJWT()
+	if err != nil {
+		logger.Error("Failed to get APNs JWT for badge", zap.Error(err))
+		return
+	}
+
+	// Silent push: content-available=1, no alert, only badge
+	payload := map[string]any{
+		"aps": map[string]any{
+			"content-available": 1,
+			"badge":             badgeCount,
+		},
+	}
+
+	body, _ := json.Marshal(payload)
+	url := fmt.Sprintf("%s/3/device/%s", s.baseURL(), deviceToken)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	if err != nil {
+		logger.Error("Failed to create APNs badge request", zap.Error(err))
+		return
+	}
+
+	req.Header.Set("Authorization", "bearer "+jwtToken)
+	req.Header.Set("apns-topic", s.cfg.BundleID)
+	req.Header.Set("apns-push-type", "background") // silent push 必须用 background
+	req.Header.Set("apns-priority", "5")             // background push 必须用 5 或更低
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		logger.Error("APNs badge request failed", zap.Error(err))
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		return
+	}
+
+	if resp.StatusCode == 410 {
+		logger.Info("Removing expired APNs token (badge push)", zap.String("device", truncateToken(deviceToken)))
+		_ = s.deviceSvc.RemoveByToken(ctx, deviceToken)
+		return
+	}
+
+	respBody, _ := io.ReadAll(resp.Body)
+	logger.Error("APNs badge error",
+		zap.Int("status", resp.StatusCode),
+		zap.String("body", string(respBody)),
+	)
+}
+
 func truncateToken(s string) string {
 	if len(s) <= 20 {
 		return s

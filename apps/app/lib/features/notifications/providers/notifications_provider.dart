@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/push/badge_service.dart';
 import '../../../core/push/push_notification_service.dart';
 import '../../../core/storage/notification_cache.dart';
 import '../../../core/websocket/ws_client.dart';
@@ -73,6 +74,17 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
     if (cached.isNotEmpty && state.isEmpty) {
       state = cached;
     }
+    _syncBadge();
+  }
+
+  /// Sync iOS app icon badge to the current pending notification count.
+  /// Called after every state mutation so the badge always matches what
+  /// the user would see if they opened the app.
+  void _syncBadge() {
+    final pendingCount = state
+        .where((n) => n.status == NotificationStatus.pending)
+        .length;
+    BadgeService.setCount(pendingCount);
   }
 
   Timer? _debounce;
@@ -119,6 +131,7 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
         return; // skip cache write for unknown messages
     }
     _persistCache();
+    _syncBadge();
   }
 
   void respondToNotification(String id, String actionValue) {
@@ -143,12 +156,14 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
       return n;
     }).toList();
     _persistCache();
+    _syncBadge();
   }
 
   void dismissNotification(String id) {
     final previous = state;
     state = state.where((n) => n.id != id).toList();
     _persistCache();
+    _syncBadge();
     _dismissOnServer(id, previous);
   }
 
@@ -161,6 +176,7 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
       if (!_mounted) return;
       state = previous;
       _persistCache();
+      _syncBadge();
     }
   }
 }

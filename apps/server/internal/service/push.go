@@ -39,6 +39,15 @@ func (r *PushRouter) SendToAll(ctx context.Context, n *model.Notification, badge
 	}
 }
 
+// UpdateBadge pushes a silent badge update to all iOS devices when pending
+// count changes (e.g. after dismiss/action on any device). Android FCM data-only
+// badge updates require vendor-specific handling and are not supported here yet.
+func (r *PushRouter) UpdateBadge(ctx context.Context, badgeCount int) {
+	if r.apns != nil {
+		go r.apns.SendSilentBadgeUpdate(ctx, badgeCount)
+	}
+}
+
 // --- FCM Service (for Android, requires Google services / VPN in China) ---
 
 type FcmService struct {

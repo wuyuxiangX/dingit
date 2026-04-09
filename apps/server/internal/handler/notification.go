@@ -207,6 +207,14 @@ func (h *NotificationHandler) Update(c *gin.Context) {
 
 	h.hub.Broadcast(model.NewNotificationUpdatedMsg(updated))
 
+	// Sync badge across all iOS devices when pending count changes.
+	// Any status change away from "pending" reduces the count.
+	if *req.Status == model.StatusDismissed || *req.Status == model.StatusActioned || *req.Status == model.StatusExpired {
+		pending := model.StatusPending
+		newCount, _ := h.store.Count(context.Background(), &pending, nil)
+		h.pushRouter.UpdateBadge(context.Background(), newCount)
+	}
+
 	if *req.Status == model.StatusActioned && updated.CallbackURL != nil && req.ActionedValue != nil {
 		h.callbackSvc.Deliver(updated, &model.ActionResponse{
 			NotificationID: id,

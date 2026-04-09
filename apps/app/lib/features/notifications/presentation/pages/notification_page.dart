@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../app/theme/app_colors.dart';
+import '../../../../core/push/badge_service.dart';
 import '../../../../core/websocket/ws_client.dart';
 import '../../../settings/providers/settings_provider.dart';
 import '../../providers/notifications_provider.dart';
@@ -25,6 +26,11 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(wsClientProvider).connect();
+      // Sync iOS badge to current pending count as soon as the page mounts.
+      // This overrides the AppDelegate's unconditional clear-to-0 with the
+      // authoritative value (what the user actually sees in the card stack).
+      final pendingNow = ref.read(pendingNotificationsProvider).length;
+      BadgeService.setCount(pendingNow);
       ref.listenManual(settingsProvider, (prev, next) {
         if (!_pushInitialized && next.isLoaded && next.serverUrl.isNotEmpty) {
           _pushInitialized = true;

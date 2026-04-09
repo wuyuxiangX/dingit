@@ -45,6 +45,7 @@ apps/server/dingit-server
 .dingit.yaml
 .env
 secrets/
+docker-compose.override.yml
 
 # Firebase credentials
 apps/app/ios/Runner/GoogleService-Info.plist
