@@ -1,0 +1,93 @@
+{
+  "@@locale": "en",
+
+  "appTitle": "Dingit",
+  "@appTitle": {
+    "description": "Application title displayed in the task switcher and notification page header"
+  },
+
+  "notificationConnectionConnected": "Updated now",
+  "notificationConnectionConnecting": "Connecting...",
+  "notificationConnectionDisconnected": "Disconnected",
+
+  "notificationDismissedPill": "Dismissed",
+  "@notificationDismissedPill": {
+    "description": "Message shown in the undo pill after a notification is swiped away"
+  },
+  "notificationUndoAction": "Undo",
+
+  "notificationEmptyTitle": "All clear",
+  "notificationEmptyBody": "You're all caught up",
+  "notificationEmptyViewHistory": "View history",
+
+  "actionBarDismiss": "Dismiss",
+  "actionBarNext": "Next",
+
+  "historyTitle": "History",
+  "historyFilterAll": "All",
+  "historyFilterActioned": "Actioned",
+  "historyFilterDismissed": "Dismissed",
+  "historyFilterExpired": "Expired",
+  "historyLoadFailed": "Failed to load",
+  "historyRetry": "Tap to retry",
+  "historyEmpty": "No history yet",
+
+  "settingsTitle": "Settings",
+  "settingsSectionServer": "SERVER",
+  "settingsServerAddress": "Address",
+  "settingsServerPlaceholder": "http://localhost:8080",
+  "settingsServerTestConnection": "Test Connection",
+  "settingsServerConnected": "Connected",
+  "settingsServerFailed": "Failed",
+
+  "settingsSectionAuth": "AUTHENTICATION",
+  "settingsAuthApiKey": "API Key",
+  "settingsAuthApiKeyPlaceholder": "Enter your API key",
+  "settingsAuthApiKeyHint": "Your API key is encrypted and stored securely on this device.",
+
+  "settingsSectionAppearance": "Appearance",
+  "settingsAppearanceAuto": "Auto",
+  "settingsAppearanceLight": "Light",
+  "settingsAppearanceDark": "Dark",
+
+  "settingsSectionLanguage": "Language",
+  "settingsLanguageAuto": "Auto",
+  "settingsLanguageEnglish": "English",
+  "settingsLanguageChinese": "简体中文",
+
+  "settingsSave": "Save Settings",
+  "settingsSaveFailed": "Save failed: {error}",
+  "@settingsSaveFailed": {
+    "description": "Snack bar shown when saving settings throws",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "HttpException: ..."
+      }
+    }
+  },
+
+  "detailNotFound": "Notification not found",
+  "detailMetadataSection": "METADATA",
+  "detailActionTaken": "Action taken",
+  "detailActionedAt": "Actioned {date}",
+  "@detailActionedAt": {
+    "description": "Timestamp row below the title showing when the user responded",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "Apr 9, 2026 14:32"
+      }
+    }
+  },
+
+  "detailStatusPending": "Pending",
+  "detailStatusActioned": "Actioned",
+  "detailStatusDismissed": "Dismissed",
+  "detailStatusExpired": "Expired",
+
+  "detailPriorityUrgent": "Urgent",
+  "detailPriorityHigh": "High",
+  "detailPriorityLow": "Low",
+  "detailPriorityNormal": "Normal"
+}

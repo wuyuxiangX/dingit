@@ -1,0 +1,69 @@
+{
+  "@@locale": "zh",
+
+  "appTitle": "Dingit",
+
+  "notificationConnectionConnected": "实时更新",
+  "notificationConnectionConnecting": "连接中…",
+  "notificationConnectionDisconnected": "已断开",
+
+  "notificationDismissedPill": "已取消",
+  "notificationUndoAction": "撤销",
+
+  "notificationEmptyTitle": "已清空",
+  "notificationEmptyBody": "所有通知都处理完了",
+  "notificationEmptyViewHistory": "查看历史",
+
+  "actionBarDismiss": "忽略",
+  "actionBarNext": "下一条",
+
+  "historyTitle": "历史",
+  "historyFilterAll": "全部",
+  "historyFilterActioned": "已处理",
+  "historyFilterDismissed": "已忽略",
+  "historyFilterExpired": "已过期",
+  "historyLoadFailed": "加载失败",
+  "historyRetry": "轻触重试",
+  "historyEmpty": "暂无历史",
+
+  "settingsTitle": "设置",
+  "settingsSectionServer": "服务器",
+  "settingsServerAddress": "地址",
+  "settingsServerPlaceholder": "http://localhost:8080",
+  "settingsServerTestConnection": "测试连接",
+  "settingsServerConnected": "已连接",
+  "settingsServerFailed": "失败",
+
+  "settingsSectionAuth": "认证",
+  "settingsAuthApiKey": "API Key",
+  "settingsAuthApiKeyPlaceholder": "输入 API Key",
+  "settingsAuthApiKeyHint": "API Key 已在本设备加密存储。",
+
+  "settingsSectionAppearance": "外观",
+  "settingsAppearanceAuto": "跟随系统",
+  "settingsAppearanceLight": "浅色",
+  "settingsAppearanceDark": "深色",
+
+  "settingsSectionLanguage": "语言",
+  "settingsLanguageAuto": "跟随系统",
+  "settingsLanguageEnglish": "English",
+  "settingsLanguageChinese": "简体中文",
+
+  "settingsSave": "保存设置",
+  "settingsSaveFailed": "保存失败：{error}",
+
+  "detailNotFound": "通知不存在",
+  "detailMetadataSection": "元数据",
+  "detailActionTaken": "已处理",
+  "detailActionedAt": "处理时间 {date}",
+
+  "detailStatusPending": "待处理",
+  "detailStatusActioned": "已处理",
+  "detailStatusDismissed": "已忽略",
+  "detailStatusExpired": "已过期",
+
+  "detailPriorityUrgent": "紧急",
+  "detailPriorityHigh": "高",
+  "detailPriorityLow": "低",
+  "detailPriorityNormal": "普通"
+}

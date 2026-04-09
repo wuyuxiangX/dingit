@@ -62,7 +62,7 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
   // Delayed-commit state: a dismiss is stored locally as
   // NotificationStatus.dismissed immediately, then actually PATCHed to the
   // server after this many seconds. During the window, the user can undo it.
-  static const _commitDelay = Duration(seconds: 4);
+  static const _commitDelay = Duration(seconds: 3);
 
   final Map<String, Timer> _pendingCommits = {};
   final Map<String, _Snapshot> _preCommit = {};

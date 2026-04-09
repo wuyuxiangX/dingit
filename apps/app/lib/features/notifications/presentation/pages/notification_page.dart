@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../../app/theme/app_colors.dart';
+import '../../../../app/locale/locale_context_ext.dart';
+import '../../../../app/theme/theme_context_ext.dart';
 import '../../../../core/push/badge_service.dart';
 import '../../../../core/ui/undo_pill.dart';
 import '../../../../core/websocket/ws_client.dart';
@@ -53,6 +54,8 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
           icon: LucideIcons.alertCircle,
           iconColor: Theme.of(context).colorScheme.error,
           duration: const Duration(seconds: 3),
+          // Float above the 80px ActionBar at the bottom of this page.
+          bottomPadding: 120,
         );
       });
 
@@ -78,9 +81,14 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
     // fades out just as the delayed PATCH fires.
     showUndoPill(
       context,
-      message: '已取消',
-      undoLabel: '撤销',
+      message: context.l10n.notificationDismissedPill,
+      undoLabel: context.l10n.notificationUndoAction,
       onUndo: () => notifier.undoDismiss(id),
+      // Match NotificationsNotifier._commitDelay so the pill fades out
+      // at the same moment the delayed PATCH fires.
+      duration: const Duration(seconds: 3),
+      // Float above the 80px ActionBar at the bottom of this page.
+      bottomPadding: 120,
     );
   }
 
@@ -105,15 +113,16 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
                     onTap: () => context.push('/settings'),
                     child: Padding(
                       padding: const EdgeInsets.all(8),
-                      child: Icon(LucideIcons.settings, size: 20, color: AppColors.ink),
+                      child: Icon(LucideIcons.settings,
+                          size: 20, color: context.colors.onSurface),
                     ),
                   ),
                   const Spacer(),
                   Column(
                     children: [
                       Text(
-                        'Dingit',
-                        style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 22),
+                        context.l10n.appTitle,
+                        style: context.typo.headlineLarge?.copyWith(fontSize: 22),
                       ),
                       const SizedBox(height: 2),
                       _ConnectionStatus(),
@@ -125,7 +134,8 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
                     onTap: () => context.push('/history'),
                     child: Padding(
                       padding: const EdgeInsets.all(8),
-                      child: Icon(LucideIcons.history, size: 20, color: AppColors.ink),
+                      child: Icon(LucideIcons.history,
+                          size: 20, color: context.colors.onSurface),
                     ),
                   ),
                 ],
@@ -168,14 +178,20 @@ class _ConnectionStatus extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stateNotifier = ref.watch(connectionStateProvider);
+    final palette = context.palette;
+    final colors = context.colors;
 
     return ValueListenableBuilder<WsConnectionState>(
       valueListenable: stateNotifier,
       builder: (context, state, _) {
+        final l10n = context.l10n;
         final (color, label) = switch (state) {
-          WsConnectionState.connected => (AppColors.success, 'Updated now'),
-          WsConnectionState.connecting => (AppColors.warning, 'Connecting...'),
-          WsConnectionState.disconnected => (AppColors.destructive, 'Disconnected'),
+          WsConnectionState.connected =>
+            (palette.success, l10n.notificationConnectionConnected),
+          WsConnectionState.connecting =>
+            (palette.warning, l10n.notificationConnectionConnecting),
+          WsConnectionState.disconnected =>
+            (colors.error, l10n.notificationConnectionDisconnected),
         };
 
         return Row(
@@ -187,7 +203,7 @@ class _ConnectionStatus extends ConsumerWidget {
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
             const SizedBox(width: 4),
-            Text(label, style: Theme.of(context).textTheme.labelSmall),
+            Text(label, style: context.typo.labelSmall),
           ],
         );
       },

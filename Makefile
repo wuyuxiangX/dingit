@@ -1,4 +1,4 @@
-.PHONY: setup codegen dev-server dev-app test format analyze clean build-cli build-server
+.PHONY: setup codegen dev-server dev-app test format analyze check-theme-i18n clean build-cli build-server
 
 setup:
 	dart pub global activate melos
@@ -30,6 +30,13 @@ analyze:
 	melos run analyze
 	cd apps/server && go vet ./...
 	cd apps/cli && go vet ./...
+	$(MAKE) check-theme-i18n
+
+# Static guard for the Flutter app: no hex color literals outside the token
+# layer, no references to the deleted AppColors class, and no hard-coded
+# Chinese text outside lib/l10n/. Safe to run in pre-commit or CI.
+check-theme-i18n:
+	bash apps/app/scripts/check-theme-i18n.sh
 
 build-server:
 	cd apps/server && go build -o dingit-server .

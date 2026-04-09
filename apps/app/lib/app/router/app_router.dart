@@ -4,6 +4,8 @@ import 'package:dingit_shared/dingit_shared.dart';
 import '../../features/notifications/presentation/pages/notification_detail_page.dart';
 import '../../features/notifications/presentation/pages/notification_history_page.dart';
 import '../../features/notifications/presentation/pages/notification_page.dart';
+import '../../features/settings/presentation/pages/appearance_page.dart';
+import '../../features/settings/presentation/pages/language_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 
 final appRouter = GoRouter(
@@ -27,6 +29,14 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/settings',
       builder: (context, state) => const SettingsPage(),
+    ),
+    GoRoute(
+      path: '/settings/appearance',
+      builder: (context, state) => const AppearancePage(),
+    ),
+    GoRoute(
+      path: '/settings/language',
+      builder: (context, state) => const LanguagePage(),
     ),
   ],
 );

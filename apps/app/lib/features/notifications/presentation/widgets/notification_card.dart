@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
-import '../../../../app/theme/app_colors.dart';
+import '../../../../app/theme/theme_context_ext.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/utils/icon_resolver.dart';
 
@@ -15,17 +15,31 @@ class NotificationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context).textTheme;
+    final theme = context.typo;
+    final colors = context.colors;
+    final palette = context.palette;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(28, 28, 28, 24),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        // Light: elevated white card with shadow.
+        // Dark: higher surface tint (surfaceContainerHigh) with a subtle
+        // outline — M3 dark elevation pattern, since shadows are invisible
+        // on near-black backgrounds.
+        color: colors.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: AppColors.shadow2, blurRadius: 30, offset: const Offset(0, 8)),
-        ],
+        border: isDark ? Border.all(color: colors.outline) : null,
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: palette.shadow2,
+                  blurRadius: 30,
+                  offset: const Offset(0, 8),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -33,12 +47,12 @@ class NotificationCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             decoration: BoxDecoration(
-              color: AppColors.paperWarm,
+              color: colors.surfaceContainer,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               formatRelativeDate(notification.timestamp),
-              style: theme.labelMedium?.copyWith(color: AppColors.inkMuted),
+              style: theme.labelMedium?.copyWith(color: colors.onSurfaceVariant),
             ),
           ),
 
@@ -51,7 +65,7 @@ class NotificationCard extends StatelessWidget {
                   Icon(
                     resolveNotificationIcon(icon),
                     size: 16,
-                    color: AppColors.accent,
+                    color: colors.primary,
                   ),
                   const SizedBox(width: 6),
                 ],
@@ -60,7 +74,7 @@ class NotificationCard extends StatelessWidget {
                   style: theme.titleSmall?.copyWith(
                     letterSpacing: 1.5,
                     fontSize: 11,
-                    color: AppColors.accent,
+                    color: colors.primary,
                   ),
                 ),
               ],
@@ -96,12 +110,11 @@ class NotificationCard extends StatelessWidget {
             child: Icon(
               Icons.arrow_outward_rounded,
               size: 18,
-              color: AppColors.inkFaint,
+              color: palette.inkFaint,
             ),
           ),
         ],
       ),
     );
   }
-
 }

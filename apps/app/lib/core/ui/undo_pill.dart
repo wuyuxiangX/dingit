@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../app/theme/app_colors.dart';
-
 /// Show a dismissible bottom-center pill with an optional undo action.
 ///
 /// The pill self-removes after [duration] or when the undo button is tapped.
@@ -13,10 +11,10 @@ import '../../app/theme/app_colors.dart';
 /// `ScaffoldMessenger.removeCurrentSnackBar + showSnackBar`).
 ///
 /// The pill is rendered through the root [Overlay] so it floats above any
-/// scaffold chrome. Colors are picked from `Theme.of(context).brightness`:
-///
-/// * Light: white surface + ink text + blue accent "撤销"
-/// * Dark:  ink surface + white text + blue accent "撤销"
+/// scaffold chrome. Colors are pulled from the Material 3 SnackBar slots
+/// (`inverseSurface` / `onInverseSurface` / `primary`) so the pill follows
+/// the theme automatically — if the user switches themes while a pill is
+/// visible, it repaints in place.
 ///
 /// Pass [icon] / [iconColor] to switch to an error or warning variant,
 /// e.g. `icon: LucideIcons.alertCircle, iconColor: Theme.of(context).colorScheme.error`.
@@ -24,6 +22,12 @@ import '../../app/theme/app_colors.dart';
 /// [undoLabel] + [onUndo] must be provided together (or both omitted) —
 /// when omitted, the divider and action button are hidden and the pill
 /// becomes a pure status toast.
+///
+/// [bottomPadding] is the distance (inside SafeArea) between the pill's
+/// bottom edge and the bottom of the screen. Pages with their own fixed
+/// bottom chrome (e.g. NotificationPage's ActionBar) should pass a value
+/// large enough to float above that chrome — the default of 20 assumes an
+/// empty bottom.
 void showUndoPill(
   BuildContext context, {
   required String message,
@@ -32,6 +36,7 @@ void showUndoPill(
   IconData icon = LucideIcons.check,
   Color? iconColor,
   Duration duration = const Duration(seconds: 4),
+  double bottomPadding = 20,
 }) {
   assert(
     (undoLabel == null) == (onUndo == null),
@@ -43,7 +48,6 @@ void showUndoPill(
   _currentEntry = null;
 
   final overlay = Overlay.of(context, rootOverlay: true);
-  final isDark = Theme.of(context).brightness == Brightness.dark;
 
   late OverlayEntry entry;
   entry = OverlayEntry(
@@ -54,7 +58,7 @@ void showUndoPill(
       icon: icon,
       iconColor: iconColor,
       duration: duration,
-      isDark: isDark,
+      bottomPadding: bottomPadding,
       onFinished: () {
         entry.remove();
         if (identical(_currentEntry, entry)) {
@@ -79,7 +83,7 @@ class _UndoPillOverlay extends StatefulWidget {
   final IconData icon;
   final Color? iconColor;
   final Duration duration;
-  final bool isDark;
+  final double bottomPadding;
   final VoidCallback onFinished;
 
   const _UndoPillOverlay({
@@ -89,7 +93,7 @@ class _UndoPillOverlay extends StatefulWidget {
     required this.icon,
     required this.iconColor,
     required this.duration,
-    required this.isDark,
+    required this.bottomPadding,
     required this.onFinished,
   });
 
@@ -139,19 +143,14 @@ class _UndoPillOverlayState extends State<_UndoPillOverlay>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = widget.isDark;
-    final pillColor = isDark ? AppColors.ink : AppColors.surface;
-    final textColor = isDark ? Colors.white : AppColors.ink;
-    final defaultIconColor = isDark ? Colors.white : AppColors.inkMuted;
-    final dividerColor = isDark ? Colors.white24 : AppColors.divider;
-    final border = isDark ? null : Border.all(color: AppColors.cardBorder);
-    final shadows = <BoxShadow>[
-      BoxShadow(
-        color: isDark ? AppColors.shadow3 : AppColors.shadow2,
-        blurRadius: isDark ? 24 : 28,
-        offset: const Offset(0, 8),
-      ),
-    ];
+    // Read theme fresh on every build — if the user toggles theme while a
+    // pill is visible, Flutter rebuilds overlay children and the pill
+    // repaints in the new theme.
+    final colors = Theme.of(context).colorScheme;
+    final pillColor = colors.inverseSurface;
+    final textColor = colors.onInverseSurface;
+    final defaultIconColor = colors.onInverseSurface;
+    final dividerColor = colors.onInverseSurface.withValues(alpha: 0.2);
     final hasUndo = widget.undoLabel != null && widget.onUndo != null;
 
     return Positioned.fill(
@@ -159,7 +158,7 @@ class _UndoPillOverlayState extends State<_UndoPillOverlay>
         child: Align(
           alignment: Alignment.bottomCenter,
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 20),
+            padding: EdgeInsets.only(bottom: widget.bottomPadding),
             child: AnimatedBuilder(
               animation: _ctl,
               builder: (_, child) {
@@ -183,8 +182,13 @@ class _UndoPillOverlayState extends State<_UndoPillOverlay>
                   decoration: BoxDecoration(
                     color: pillColor,
                     borderRadius: BorderRadius.circular(999),
-                    border: border,
-                    boxShadow: shadows,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        blurRadius: 28,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -216,8 +220,8 @@ class _UndoPillOverlayState extends State<_UndoPillOverlay>
                           behavior: HitTestBehavior.opaque,
                           child: Text(
                             widget.undoLabel!,
-                            style: const TextStyle(
-                              color: AppColors.accent,
+                            style: TextStyle(
+                              color: colors.inversePrimary,
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),

@@ -6,7 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
-import '../../../../app/theme/app_colors.dart';
+import '../../../../app/locale/locale_context_ext.dart';
+import '../../../../app/theme/theme_context_ext.dart';
 import 'notification_card.dart';
 
 class CardStack extends StatefulWidget {
@@ -148,27 +149,25 @@ class _CardStackState extends State<CardStack>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(LucideIcons.checkCircle2, size: 48, color: AppColors.success),
+            Icon(LucideIcons.checkCircle2,
+                size: 48, color: context.palette.success),
             const SizedBox(height: 16),
             Text(
-              'All clear',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineLarge
-                  ?.copyWith(fontSize: 28),
+              context.l10n.notificationEmptyTitle,
+              style: context.typo.headlineLarge?.copyWith(fontSize: 28),
             ),
             const SizedBox(height: 8),
             Text(
-              "You're all caught up",
-              style: Theme.of(context).textTheme.bodyMedium,
+              context.l10n.notificationEmptyBody,
+              style: context.typo.bodyMedium,
             ),
             const SizedBox(height: 20),
             GestureDetector(
               onTap: () => context.push('/history'),
               child: Text(
-                'View history',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.accent,
+                context.l10n.notificationEmptyViewHistory,
+                style: context.typo.bodyMedium?.copyWith(
+                      color: context.colors.primary,
                       fontWeight: FontWeight.w600,
                     ),
               ),
@@ -216,16 +215,16 @@ class _CardStackState extends State<CardStack>
             children: [
               Text(
                 '1',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.ink,
+                style: context.typo.labelMedium?.copyWith(
+                      color: context.colors.onSurface,
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
                     ),
               ),
               Text(
                 ' / $total',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.inkFaint,
+                style: context.typo.labelMedium?.copyWith(
+                      color: context.palette.inkFaint,
                       fontSize: 13,
                     ),
               ),

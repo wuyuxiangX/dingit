@@ -6,30 +6,14 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../../../app/theme/app_colors.dart';
+import '../../../../app/locale/locale_context_ext.dart';
+import '../../../../app/locale/locale_provider.dart';
+import '../../../../app/theme/theme_context_ext.dart';
 import '../../../../app/theme/theme_mode_provider.dart';
+import '../../../../l10n/gen/app_localizations.dart';
 import '../../../notifications/providers/notifications_provider.dart';
 import '../../providers/settings_provider.dart';
-
-// -- Shared text styles -------------------------------------------------------
-
-TextStyle _label() => GoogleFonts.plusJakartaSans(
-      fontSize: 15,
-      fontWeight: FontWeight.w400,
-      color: AppColors.ink,
-    );
-
-TextStyle _hint() => GoogleFonts.plusJakartaSans(
-      fontSize: 15,
-      fontWeight: FontWeight.w400,
-      color: AppColors.inkFaint,
-    );
-
-TextStyle _sectionTitle() => GoogleFonts.plusJakartaSans(
-      fontSize: 13,
-      fontWeight: FontWeight.w500,
-      color: AppColors.inkFaint,
-    );
+import '../widgets/settings_tile.dart';
 
 // -- Page ---------------------------------------------------------------------
 
@@ -115,11 +99,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         result: result,
       );
     }
-    return const Icon(
+    return Icon(
       LucideIcons.chevronRight,
-      key: ValueKey('chev'),
+      key: const ValueKey('chev'),
       size: 16,
-      color: AppColors.inkFaint,
+      color: context.palette.inkFaint,
     );
   }
 
@@ -142,8 +126,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Save failed: $e', style: _label().copyWith(color: AppColors.paper)),
-            backgroundColor: AppColors.destructive,
+            content: Text(
+              context.l10n.settingsSaveFailed(e.toString()),
+              style: settingsLabelStyle(context)
+                  .copyWith(color: context.colors.onError),
+            ),
+            backgroundColor: context.colors.error,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
@@ -155,6 +143,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    final locale = ref.watch(localeProvider);
+    final colors = context.colors;
+    final l10n = context.l10n;
 
     if (settings.isLoaded && _serverUrlController.text.isEmpty) {
       _serverUrlController.text = settings.serverUrl;
@@ -162,22 +154,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.paperWarm,
+      backgroundColor: colors.surfaceContainer,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(LucideIcons.arrowLeft, size: 20),
-          color: AppColors.ink,
+          color: colors.onSurface,
           onPressed: () => context.pop(),
         ),
         title: Text(
-          'Settings',
+          l10n.settingsTitle,
           style: GoogleFonts.plusJakartaSans(
             fontSize: 17,
             fontWeight: FontWeight.w600,
-            color: AppColors.ink,
+            color: colors.onSurface,
           ),
         ),
         centerTitle: true,
@@ -186,19 +178,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
         children: [
           // ── Server section ──────────────────────────────────
-          _SectionTitle('SERVER'),
-          _Card(
+          SettingsSectionTitle(l10n.settingsSectionServer),
+          SettingsCard(
             children: [
               _TextFieldTile(
-                label: 'Address',
+                label: l10n.settingsServerAddress,
                 controller: _serverUrlController,
-                placeholder: 'http://localhost:8080',
+                placeholder: l10n.settingsServerPlaceholder,
                 keyboardType: TextInputType.url,
               ),
-              const _TileDivider(),
-              _ActionTile(
+              const SettingsTileDivider(),
+              SettingsActionTile(
                 icon: LucideIcons.activity,
-                label: 'Test Connection',
+                label: l10n.settingsServerTestConnection,
                 onTap: _isTesting ? null : _testConnection,
                 isLoading: _isTesting,
                 trailing: AnimatedSwitcher(
@@ -214,20 +206,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 24),
 
           // ── Authentication section ──────────────────────────
-          _SectionTitle('AUTHENTICATION'),
-          _Card(
+          SettingsSectionTitle(l10n.settingsSectionAuth),
+          SettingsCard(
             children: [
               _TextFieldTile(
-                label: 'API Key',
+                label: l10n.settingsAuthApiKey,
                 controller: _apiKeyController,
-                placeholder: 'Enter your API key',
+                placeholder: l10n.settingsAuthApiKeyPlaceholder,
                 obscureText: _obscureApiKey,
                 suffixIcon: GestureDetector(
                   onTap: () => setState(() => _obscureApiKey = !_obscureApiKey),
                   child: Icon(
                     _obscureApiKey ? LucideIcons.eyeOff : LucideIcons.eye,
                     size: 17,
-                    color: AppColors.inkFaint,
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -236,10 +228,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
-              'Your API key is encrypted and stored securely on this device.',
+              l10n.settingsAuthApiKeyHint,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 12,
-                color: AppColors.inkFaint,
+                color: context.palette.inkFaint,
                 height: 1.4,
               ),
             ),
@@ -248,25 +240,34 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 32),
 
           // ── Appearance ──────────────────────────────────────
-          const _SectionTitle('Appearance'),
-          _Card(
+          // Tap → push /settings/appearance sub-page. Current value is shown
+          // in the trailing slot so the tile reads e.g. "Appearance   Dark ›"
+          // — same pattern as iOS Settings > Display & Brightness.
+          SettingsCard(
             children: [
-              _ThemeModeTile(
-                icon: LucideIcons.smartphone,
-                label: 'Auto',
-                mode: ThemeMode.system,
+              SettingsActionTile(
+                icon: LucideIcons.palette,
+                label: l10n.settingsSectionAppearance,
+                onTap: () => context.push('/settings/appearance'),
+                trailing: SettingsDisclosureValue(
+                  _themeModeLabel(l10n, themeMode),
+                ),
               ),
-              const _TileDivider(),
-              _ThemeModeTile(
-                icon: LucideIcons.sun,
-                label: 'Light',
-                mode: ThemeMode.light,
-              ),
-              const _TileDivider(),
-              _ThemeModeTile(
-                icon: LucideIcons.moon,
-                label: 'Dark',
-                mode: ThemeMode.dark,
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Language ────────────────────────────────────────
+          SettingsCard(
+            children: [
+              SettingsActionTile(
+                icon: LucideIcons.globe,
+                label: l10n.settingsSectionLanguage,
+                onTap: () => context.push('/settings/language'),
+                trailing: SettingsDisclosureValue(
+                  _localeLabel(l10n, locale),
+                ),
               ),
             ],
           ),
@@ -274,14 +275,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 32),
 
           // ── Save ────────────────────────────────────────────
-          _Card(
+          SettingsCard(
             children: [
-              _ActionTile(
+              SettingsActionTile(
                 icon: LucideIcons.check,
-                label: 'Save Settings',
+                label: l10n.settingsSave,
                 onTap: _save,
-                iconColor: AppColors.accent,
-                labelColor: AppColors.accent,
+                iconColor: colors.primary,
+                labelColor: colors.primary,
               ),
             ],
           ),
@@ -291,101 +292,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 }
 
-// -- Theme mode row ----------------------------------------------------------
+// ── Label helpers ───────────────────────────────────────────────────────────
 
-class _ThemeModeTile extends ConsumerWidget {
-  final IconData icon;
-  final String label;
-  final ThemeMode mode;
-
-  const _ThemeModeTile({
-    required this.icon,
-    required this.label,
-    required this.mode,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final current = ref.watch(themeModeProvider);
-    final selected = current == mode;
-    return _ActionTile(
-      icon: icon,
-      label: label,
-      onTap: () => ref.read(themeModeProvider.notifier).set(mode),
-      iconColor: selected ? AppColors.accent : AppColors.ink,
-      labelColor: selected ? AppColors.accent : AppColors.ink,
-      trailing: selected
-          ? const Icon(
-              LucideIcons.check,
-              size: 16,
-              color: AppColors.accent,
-            )
-          : const SizedBox.shrink(),
-    );
-  }
+String _themeModeLabel(AppLocalizations l10n, ThemeMode mode) {
+  return switch (mode) {
+    ThemeMode.system => l10n.settingsAppearanceAuto,
+    ThemeMode.light => l10n.settingsAppearanceLight,
+    ThemeMode.dark => l10n.settingsAppearanceDark,
+  };
 }
 
-// -- Section title ------------------------------------------------------------
-
-class _SectionTitle extends StatelessWidget {
-  final String title;
-  const _SectionTitle(this.title);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: Text(title, style: _sectionTitle()),
-    );
-  }
+String _localeLabel(AppLocalizations l10n, Locale? locale) {
+  if (locale == null) return l10n.settingsLanguageAuto;
+  return switch (locale.languageCode) {
+    'en' => l10n.settingsLanguageEnglish,
+    'zh' => l10n.settingsLanguageChinese,
+    _ => l10n.settingsLanguageAuto,
+  };
 }
 
-// -- Grouped card container ---------------------------------------------------
-
-class _Card extends StatelessWidget {
-  final List<Widget> children;
-  const _Card({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: const [
-          BoxShadow(
-            color: AppColors.shadow1,
-            blurRadius: 8,
-            offset: Offset(0, 1),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: children,
-        ),
-      ),
-    );
-  }
-}
-
-// -- Indented divider inside card ---------------------------------------------
-
-class _TileDivider extends StatelessWidget {
-  const _TileDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.only(left: 16),
-      child: Divider(height: 0.5, thickness: 0.5, color: AppColors.divider),
-    );
-  }
-}
-
-// -- Text field tile ----------------------------------------------------------
+// ── Text field tile (still private, only used on the main page) ────────────
 
 class _TextFieldTile extends StatelessWidget {
   final String label;
@@ -412,7 +338,7 @@ class _TextFieldTile extends StatelessWidget {
         children: [
           SizedBox(
             width: 72,
-            child: Text(label, style: _label()),
+            child: Text(label, style: settingsLabelStyle(context)),
           ),
           Expanded(
             child: TextField(
@@ -421,11 +347,11 @@ class _TextFieldTile extends StatelessWidget {
               obscureText: obscureText,
               autocorrect: false,
               enableSuggestions: false,
-              style: _label(),
+              style: settingsLabelStyle(context),
               textAlign: TextAlign.right,
               decoration: InputDecoration(
                 hintText: placeholder,
-                hintStyle: _hint(),
+                hintStyle: settingsHintStyle(context),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
@@ -443,86 +369,7 @@ class _TextFieldTile extends StatelessWidget {
   }
 }
 
-// -- Tappable action tile -----------------------------------------------------
-
-class _ActionTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final bool isLoading;
-  final Widget? trailing;
-  final Color? iconColor;
-  final Color? labelColor;
-
-  const _ActionTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.isLoading = false,
-    this.trailing,
-    this.iconColor,
-    this.labelColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final ic = iconColor ?? AppColors.ink;
-    final lc = labelColor ?? AppColors.ink;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 13, 14, 13),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 18,
-                height: 18,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 160),
-                  transitionBuilder: (child, anim) =>
-                      FadeTransition(opacity: anim, child: child),
-                  child: isLoading
-                      ? SizedBox(
-                          key: const ValueKey('spin'),
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: ic,
-                          ),
-                        )
-                      : Icon(
-                          icon,
-                          key: const ValueKey('icon'),
-                          size: 18,
-                          color: ic,
-                        ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  label,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w400,
-                    color: lc,
-                  ),
-                ),
-              ),
-              ?trailing,
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// -- Test result model --------------------------------------------------------
+// ── Test result model + badge ──────────────────────────────────────────────
 
 class _TestResult {
   final bool isSuccess;
@@ -535,8 +382,6 @@ class _TestResult {
   const _TestResult.failure(this.error) : isSuccess = false;
 }
 
-// -- Status badge -------------------------------------------------------------
-
 class _StatusBadge extends StatelessWidget {
   final _TestResult result;
   const _StatusBadge({super.key, required this.result});
@@ -544,18 +389,21 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isOk = result.isSuccess;
+    final color = isOk ? context.palette.success : context.colors.error;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: (isOk ? AppColors.success : AppColors.destructive).withValues(alpha: 0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        isOk ? 'Connected' : 'Failed',
+        isOk
+            ? context.l10n.settingsServerConnected
+            : context.l10n.settingsServerFailed,
         style: GoogleFonts.plusJakartaSans(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: isOk ? AppColors.success : AppColors.destructive,
+          color: color,
         ),
       ),
     );

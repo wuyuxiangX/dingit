@@ -5,7 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
-import '../../../../app/theme/app_colors.dart';
+import '../../../../app/locale/locale_context_ext.dart';
+import '../../../../app/theme/theme_context_ext.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../providers/history_provider.dart';
 
@@ -21,12 +22,17 @@ class _NotificationHistoryPageState
     extends ConsumerState<NotificationHistoryPage> {
   final _scrollController = ScrollController();
 
-  static const _filters = <String?, String>{
-    null: 'All',
-    'actioned': 'Actioned',
-    'dismissed': 'Dismissed',
-    'expired': 'Expired',
-  };
+  // Filter labels are resolved lazily against the active locale so they
+  // update when the user switches languages.
+  Map<String?, String> _filters(BuildContext context) {
+    final l10n = context.l10n;
+    return <String?, String>{
+      null: l10n.historyFilterAll,
+      'actioned': l10n.historyFilterActioned,
+      'dismissed': l10n.historyFilterDismissed,
+      'expired': l10n.historyFilterExpired,
+    };
+  }
 
   @override
   void initState() {
@@ -53,25 +59,25 @@ class _NotificationHistoryPageState
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(historyProvider);
-    final theme = Theme.of(context).textTheme;
+    final colors = context.colors;
 
     return Scaffold(
-      backgroundColor: AppColors.paperWarm,
+      backgroundColor: colors.surfaceContainer,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(LucideIcons.arrowLeft, size: 20),
-          color: AppColors.ink,
+          color: colors.onSurface,
           onPressed: () => context.pop(),
         ),
         title: Text(
-          'History',
+          context.l10n.historyTitle,
           style: GoogleFonts.plusJakartaSans(
             fontSize: 17,
             fontWeight: FontWeight.w600,
-            color: AppColors.ink,
+            color: colors.onSurface,
           ),
         ),
         centerTitle: true,
@@ -85,7 +91,7 @@ class _NotificationHistoryPageState
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: Row(
               children: [
-                for (final entry in _filters.entries)
+                for (final entry in _filters(context).entries)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: _FilterChip(
@@ -101,16 +107,21 @@ class _NotificationHistoryPageState
           ),
 
           // -- List --
-          Expanded(child: _buildBody(state, theme)),
+          Expanded(child: _buildBody(state)),
         ],
       ),
     );
   }
 
-  Widget _buildBody(HistoryState state, TextTheme theme) {
+  Widget _buildBody(HistoryState state) {
+    final theme = context.typo;
+    final colors = context.colors;
+    final palette = context.palette;
+
     if (state.isLoading && state.items.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.ink, strokeWidth: 2),
+      return Center(
+        child: CircularProgressIndicator(
+            color: colors.onSurface, strokeWidth: 2),
       );
     }
 
@@ -119,15 +130,15 @@ class _NotificationHistoryPageState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(LucideIcons.alertCircle, size: 40, color: AppColors.inkFaint),
+            Icon(LucideIcons.alertCircle, size: 40, color: palette.inkFaint),
             const SizedBox(height: 12),
-            Text('Failed to load', style: theme.bodyMedium),
+            Text(context.l10n.historyLoadFailed, style: theme.bodyMedium),
             const SizedBox(height: 12),
             GestureDetector(
               onTap: () => ref.read(historyProvider.notifier).refresh(),
               child: Text(
-                'Tap to retry',
-                style: theme.bodyMedium?.copyWith(color: AppColors.accent),
+                context.l10n.historyRetry,
+                style: theme.bodyMedium?.copyWith(color: colors.primary),
               ),
             ),
           ],
@@ -140,16 +151,16 @@ class _NotificationHistoryPageState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(LucideIcons.inbox, size: 40, color: AppColors.inkFaint),
+            Icon(LucideIcons.inbox, size: 40, color: palette.inkFaint),
             const SizedBox(height: 12),
-            Text('No history yet', style: theme.bodyMedium),
+            Text(context.l10n.historyEmpty, style: theme.bodyMedium),
           ],
         ),
       );
     }
 
     return RefreshIndicator(
-      color: AppColors.ink,
+      color: colors.onSurface,
       onRefresh: () => ref.read(historyProvider.notifier).refresh(),
       child: ListView.builder(
         controller: _scrollController,
@@ -157,11 +168,11 @@ class _NotificationHistoryPageState
         itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == state.items.length) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
                 child: CircularProgressIndicator(
-                  color: AppColors.inkFaint,
+                  color: palette.inkFaint,
                   strokeWidth: 2,
                 ),
               ),
@@ -188,6 +199,11 @@ class _NotificationHistoryPageState
 }
 
 // -- Filter chip --
+//
+// In both light and dark mode, selected = brand blue (primary), not a
+// black/white luminance flip. Flipping by luminance would make the dark-mode
+// "selected" chip visually pop harder than the notification cards behind
+// it, inverting the intended visual hierarchy.
 
 class _FilterChip extends StatelessWidget {
   final String label;
@@ -202,20 +218,22 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
+    final palette = context.palette;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? AppColors.ink : AppColors.surface,
+          color: selected ? colors.primary : colors.surface,
           borderRadius: BorderRadius.circular(20),
           boxShadow: selected
               ? null
-              : const [
+              : [
                   BoxShadow(
-                    color: AppColors.shadow1,
+                    color: palette.shadow1,
                     blurRadius: 4,
-                    offset: Offset(0, 1),
+                    offset: const Offset(0, 1),
                   ),
                 ],
         ),
@@ -224,7 +242,7 @@ class _FilterChip extends StatelessWidget {
           style: GoogleFonts.plusJakartaSans(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: selected ? AppColors.paper : AppColors.inkMuted,
+            color: selected ? colors.onPrimary : colors.onSurfaceVariant,
             height: 1.0,
           ),
         ),
@@ -250,16 +268,17 @@ class _HistoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context).textTheme;
-    final statusColor = _statusColor(notification.status);
+    final theme = context.typo;
+    final colors = context.colors;
+    final palette = context.palette;
+    final statusColor = _statusColor(context, notification.status);
 
     return Column(
       children: [
-        if (isFirst)
-          const SizedBox(height: 4),
+        if (isFirst) const SizedBox(height: 4),
         Container(
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: colors.surface,
             borderRadius: BorderRadius.only(
               topLeft: Radius.circular(isFirst ? 14 : 0),
               topRight: Radius.circular(isFirst ? 14 : 0),
@@ -267,11 +286,11 @@ class _HistoryTile extends StatelessWidget {
               bottomRight: Radius.circular(isLast ? 14 : 0),
             ),
             boxShadow: isFirst
-                ? const [
+                ? [
                     BoxShadow(
-                      color: AppColors.shadow1,
+                      color: palette.shadow1,
                       blurRadius: 8,
-                      offset: Offset(0, 1),
+                      offset: const Offset(0, 1),
                     ),
                   ]
                 : null,
@@ -322,7 +341,7 @@ class _HistoryTile extends StatelessWidget {
                                 Text(
                                   notification.source,
                                   style: theme.labelSmall?.copyWith(
-                                    color: AppColors.accent,
+                                    color: colors.primary,
                                     letterSpacing: 0.3,
                                   ),
                                 ),
@@ -337,7 +356,8 @@ class _HistoryTile extends StatelessWidget {
                                 Text(
                                   notification.priority.toUpperCase(),
                                   style: theme.labelSmall?.copyWith(
-                                    color: _priorityColor(notification.priority),
+                                    color: _priorityColor(
+                                        context, notification.priority),
                                     fontWeight: FontWeight.w700,
                                     fontSize: 9,
                                   ),
@@ -349,10 +369,10 @@ class _HistoryTile extends StatelessWidget {
                       ),
                     ),
 
-                    const Icon(
+                    Icon(
                       LucideIcons.chevronRight,
                       size: 16,
-                      color: AppColors.inkFaint,
+                      color: palette.inkFaint,
                     ),
                   ],
                 ),
@@ -362,33 +382,36 @@ class _HistoryTile extends StatelessWidget {
         ),
         if (!isLast)
           Container(
-            color: AppColors.surface,
+            color: colors.surface,
             padding: const EdgeInsets.only(left: 36),
-            child: const Divider(
+            child: Divider(
               height: 0.5,
               thickness: 0.5,
-              color: AppColors.divider,
+              color: colors.outlineVariant,
             ),
           ),
       ],
     );
   }
 
-  Color _statusColor(NotificationStatus status) {
+  Color _statusColor(BuildContext context, NotificationStatus status) {
+    final colors = context.colors;
+    final palette = context.palette;
     return switch (status) {
-      NotificationStatus.pending => AppColors.accent,
-      NotificationStatus.actioned => AppColors.success,
-      NotificationStatus.dismissed => AppColors.inkFaint,
-      NotificationStatus.expired => AppColors.warning,
+      NotificationStatus.pending => colors.primary,
+      NotificationStatus.actioned => palette.success,
+      NotificationStatus.dismissed => palette.inkFaint,
+      NotificationStatus.expired => palette.warning,
     };
   }
 
-  Color _priorityColor(String priority) {
+  Color _priorityColor(BuildContext context, String priority) {
+    final colors = context.colors;
+    final palette = context.palette;
     return switch (priority) {
-      'urgent' => AppColors.destructive,
-      'high' => AppColors.warning,
-      _ => AppColors.inkFaint,
+      'urgent' => colors.error,
+      'high' => palette.warning,
+      _ => palette.inkFaint,
     };
   }
-
 }

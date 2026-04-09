@@ -5,7 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
-import '../../../../app/theme/app_colors.dart';
+import '../../../../app/locale/locale_context_ext.dart';
+import '../../../../app/theme/theme_context_ext.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/utils/icon_resolver.dart';
 import '../../providers/notifications_provider.dart';
@@ -22,6 +23,7 @@ class NotificationDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
     // Prefer passed notification (from history), fallback to in-memory list
     final notifications = ref.watch(notificationsProvider);
     final notification = this.notification ??
@@ -31,33 +33,33 @@ class NotificationDetailPage extends ConsumerWidget {
 
     if (notification == null) {
       return Scaffold(
-        backgroundColor: AppColors.paperWarm,
+        backgroundColor: colors.surfaceContainer,
         appBar: _buildAppBar(context),
         body: Center(
           child: Text(
-            'Notification not found',
-            style: Theme.of(context).textTheme.bodyMedium,
+            context.l10n.detailNotFound,
+            style: context.typo.bodyMedium,
           ),
         ),
       );
     }
 
-    final theme = Theme.of(context).textTheme;
+    final theme = context.typo;
     final isPending = notification.status == NotificationStatus.pending;
 
     return Scaffold(
-      backgroundColor: AppColors.paperWarm,
+      backgroundColor: colors.surfaceContainer,
       body: CustomScrollView(
         slivers: [
           // -- Collapsing app bar with source header --
           SliverAppBar(
-            backgroundColor: AppColors.paperWarm,
+            backgroundColor: colors.surfaceContainer,
             elevation: 0,
             scrolledUnderElevation: 0,
             pinned: true,
             leading: IconButton(
               icon: const Icon(LucideIcons.arrowLeft, size: 20),
-              color: AppColors.ink,
+              color: colors.onSurface,
               onPressed: () => context.pop(),
             ),
             actions: [
@@ -76,7 +78,8 @@ class NotificationDetailPage extends ConsumerWidget {
                   children: [
                     if (notification.icon case final icon?
                         when icon.isNotEmpty) ...[
-                      Icon(resolveNotificationIcon(icon), size: 15, color: AppColors.accent),
+                      Icon(resolveNotificationIcon(icon),
+                          size: 15, color: colors.primary),
                       const SizedBox(width: 6),
                     ],
                     if (notification.source.isNotEmpty)
@@ -85,7 +88,7 @@ class NotificationDetailPage extends ConsumerWidget {
                         style: theme.titleSmall?.copyWith(
                           letterSpacing: 1.5,
                           fontSize: 11,
-                          color: AppColors.accent,
+                          color: colors.primary,
                         ),
                       ),
                     const Spacer(),
@@ -101,7 +104,7 @@ class NotificationDetailPage extends ConsumerWidget {
                   style: GoogleFonts.dmSerifDisplay(
                     fontSize: 28,
                     fontWeight: FontWeight.w400,
-                    color: AppColors.ink,
+                    color: colors.onSurface,
                     height: 1.15,
                   ),
                 ),
@@ -114,7 +117,7 @@ class NotificationDetailPage extends ConsumerWidget {
                 const SizedBox(height: 28),
 
                 // Divider
-                const Divider(height: 1, color: AppColors.divider),
+                Divider(height: 1, color: colors.outlineVariant),
 
                 const SizedBox(height: 28),
 
@@ -124,7 +127,7 @@ class NotificationDetailPage extends ConsumerWidget {
                   style: theme.bodyLarge?.copyWith(
                     height: 1.75,
                     fontSize: 16,
-                    color: AppColors.inkMuted,
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
 
@@ -171,12 +174,11 @@ class NotificationDetailPage extends ConsumerWidget {
       scrolledUnderElevation: 0,
       leading: IconButton(
         icon: const Icon(LucideIcons.arrowLeft, size: 20),
-        color: AppColors.ink,
+        color: context.colors.onSurface,
         onPressed: () => context.pop(),
       ),
     );
   }
-
 }
 
 // -- Status chip --
@@ -187,11 +189,17 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
+    final palette = context.palette;
+    final l10n = context.l10n;
     final (label, color) = switch (status) {
-      NotificationStatus.pending => ('Pending', AppColors.accent),
-      NotificationStatus.actioned => ('Actioned', AppColors.success),
-      NotificationStatus.dismissed => ('Dismissed', AppColors.inkFaint),
-      NotificationStatus.expired => ('Expired', AppColors.warning),
+      NotificationStatus.pending => (l10n.detailStatusPending, colors.primary),
+      NotificationStatus.actioned =>
+        (l10n.detailStatusActioned, palette.success),
+      NotificationStatus.dismissed =>
+        (l10n.detailStatusDismissed, palette.inkFaint),
+      NotificationStatus.expired =>
+        (l10n.detailStatusExpired, palette.warning),
     };
 
     return Container(
@@ -223,11 +231,18 @@ class _PriorityIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     if (priority == 'normal') return const SizedBox.shrink();
 
+    final colors = context.colors;
+    final palette = context.palette;
+    final l10n = context.l10n;
+
     final (label, color, icon) = switch (priority) {
-      'urgent' => ('Urgent', AppColors.destructive, LucideIcons.alertCircle),
-      'high' => ('High', AppColors.warning, LucideIcons.arrowUp),
-      'low' => ('Low', AppColors.inkFaint, LucideIcons.arrowDown),
-      _ => ('Normal', AppColors.inkFaint, LucideIcons.minus),
+      'urgent' =>
+        (l10n.detailPriorityUrgent, colors.error, LucideIcons.alertCircle),
+      'high' =>
+        (l10n.detailPriorityHigh, palette.warning, LucideIcons.arrowUp),
+      'low' =>
+        (l10n.detailPriorityLow, palette.inkFaint, LucideIcons.arrowDown),
+      _ => (l10n.detailPriorityNormal, palette.inkFaint, LucideIcons.minus),
     };
 
     return Row(
@@ -257,7 +272,8 @@ class _TimestampRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context).textTheme;
+    final theme = context.typo;
+    final palette = context.palette;
     final created = formatFullDate(notification.timestamp);
 
     return Column(
@@ -265,7 +281,7 @@ class _TimestampRow extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(LucideIcons.clock3, size: 13, color: AppColors.inkFaint),
+            Icon(LucideIcons.clock3, size: 13, color: palette.inkFaint),
             const SizedBox(width: 6),
             Text(created, style: theme.bodyMedium),
           ],
@@ -274,11 +290,11 @@ class _TimestampRow extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              Icon(LucideIcons.checkCircle2, size: 13, color: AppColors.success),
+              Icon(LucideIcons.checkCircle2, size: 13, color: palette.success),
               const SizedBox(width: 6),
               Text(
-                'Actioned ${formatFullDate(actionedAt)}',
-                style: theme.bodyMedium?.copyWith(color: AppColors.success),
+                context.l10n.detailActionedAt(formatFullDate(actionedAt)),
+                style: theme.bodyMedium?.copyWith(color: palette.success),
               ),
             ],
           ),
@@ -286,7 +302,6 @@ class _TimestampRow extends StatelessWidget {
       ],
     );
   }
-
 }
 
 // -- Metadata section --
@@ -297,7 +312,9 @@ class _MetadataSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context).textTheme;
+    final theme = context.typo;
+    final colors = context.colors;
+    final palette = context.palette;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -305,9 +322,9 @@ class _MetadataSection extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(left: 2, bottom: 10),
           child: Text(
-            'METADATA',
+            context.l10n.detailMetadataSection,
             style: theme.labelMedium?.copyWith(
-              color: AppColors.inkFaint,
+              color: palette.inkFaint,
               fontSize: 11,
               letterSpacing: 1.5,
             ),
@@ -316,13 +333,13 @@ class _MetadataSection extends StatelessWidget {
         Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: colors.surface,
             borderRadius: BorderRadius.circular(14),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: AppColors.shadow1,
+                color: palette.shadow1,
                 blurRadius: 8,
-                offset: Offset(0, 1),
+                offset: const Offset(0, 1),
               ),
             ],
           ),
@@ -332,10 +349,12 @@ class _MetadataSection extends StatelessWidget {
               children: [
                 for (final (i, entry) in metadata.entries.indexed) ...[
                   if (i > 0)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16),
                       child: Divider(
-                          height: 0.5, thickness: 0.5, color: AppColors.divider),
+                          height: 0.5,
+                          thickness: 0.5,
+                          color: colors.outlineVariant),
                     ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
@@ -347,7 +366,7 @@ class _MetadataSection extends StatelessWidget {
                           child: Text(
                             entry.key,
                             style: theme.bodyMedium?.copyWith(
-                              color: AppColors.inkFaint,
+                              color: palette.inkFaint,
                               fontSize: 13,
                             ),
                           ),
@@ -358,7 +377,7 @@ class _MetadataSection extends StatelessWidget {
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
-                              color: AppColors.ink,
+                              color: colors.onSurface,
                             ),
                             textAlign: TextAlign.right,
                           ),
@@ -384,35 +403,37 @@ class _ActionedInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context).textTheme;
+    final theme = context.typo;
+    final palette = context.palette;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.success.withValues(alpha: 0.06),
+        color: palette.success.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.success.withValues(alpha: 0.15)),
+        border: Border.all(color: palette.success.withValues(alpha: 0.15)),
       ),
       child: Row(
         children: [
-          Icon(LucideIcons.checkCircle2, size: 18, color: AppColors.success),
+          Icon(LucideIcons.checkCircle2, size: 18, color: palette.success),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Action taken',
+                  context.l10n.detailActionTaken,
                   style: theme.bodyMedium?.copyWith(
-                    color: AppColors.success,
+                    color: palette.success,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   notification.actionedValue ?? '',
-                  style: theme.bodyMedium?.copyWith(color: AppColors.inkMuted),
+                  style: theme.bodyMedium
+                      ?.copyWith(color: context.colors.onSurfaceVariant),
                 ),
               ],
             ),
@@ -432,6 +453,7 @@ class _ActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Column(
       children: [
         for (final (i, action) in notification.actions.indexed) ...[
@@ -443,9 +465,10 @@ class _ActionButtons extends StatelessWidget {
               onPressed: () => onAction(action.value),
               style: FilledButton.styleFrom(
                 backgroundColor: action.destructive
-                    ? AppColors.destructive
-                    : AppColors.ink,
-                foregroundColor: AppColors.paper,
+                    ? colors.error
+                    : colors.onSurface,
+                foregroundColor:
+                    action.destructive ? colors.onError : colors.surface,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dingit_shared/dingit_shared.dart';
 
-import '../../../../app/theme/app_colors.dart';
+import '../../../../app/locale/locale_context_ext.dart';
+import '../../../../app/theme/theme_context_ext.dart';
 
 class ActionBar extends StatelessWidget {
   final NotificationModel? notification;
@@ -42,7 +43,7 @@ class ActionBar extends StatelessWidget {
                   if (onDismiss != null)
                     Expanded(
                       child: _ActionItem(
-                        label: 'Dismiss',
+                        label: context.l10n.actionBarDismiss,
                         icon: LucideIcons.xCircle,
                         onTap: onDismiss,
                       ),
@@ -50,7 +51,7 @@ class ActionBar extends StatelessWidget {
                   if (onNext != null)
                     Expanded(
                       child: _ActionItem(
-                        label: 'Next',
+                        label: context.l10n.actionBarNext,
                         icon: LucideIcons.arrowRight,
                         onTap: onNext,
                       ),
@@ -112,7 +113,9 @@ class _ActionItemState extends State<_ActionItem> {
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.destructive ? AppColors.destructive : AppColors.inkMuted;
+    final color = widget.destructive
+        ? context.colors.error
+        : context.colors.onSurfaceVariant;
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
