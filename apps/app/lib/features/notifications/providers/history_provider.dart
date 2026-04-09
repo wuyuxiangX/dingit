@@ -136,4 +136,13 @@ class HistoryNotifier extends Notifier<HistoryState> {
   void setFilter(String? status) {
     fetch(status: status);
   }
+
+  /// Drop every cached history item and the persisted SharedPreferences
+  /// cache entry. This is a *local-only* clear — the server keeps the
+  /// notifications, so the next `refresh()` repopulates the list.
+  /// Pending notifications and the last-sync timestamp are left alone.
+  Future<void> clearLocal() async {
+    state = const HistoryState();
+    await _cache.clearHistory();
+  }
 }

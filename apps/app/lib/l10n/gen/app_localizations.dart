@@ -218,6 +218,18 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settingsTitle;
 
+  /// AppBar trailing action on Settings that saves and closes the page
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get settingsDone;
+
+  /// Generic cancel button used in dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get commonCancel;
+
   /// No description provided for @settingsSectionServer.
   ///
   /// In en, this message translates to:
@@ -278,6 +290,12 @@ abstract class AppLocalizations {
   /// **'Your API key is encrypted and stored securely on this device.'**
   String get settingsAuthApiKeyHint;
 
+  /// No description provided for @settingsSectionPreferences.
+  ///
+  /// In en, this message translates to:
+  /// **'PREFERENCES'**
+  String get settingsSectionPreferences;
+
   /// No description provided for @settingsSectionAppearance.
   ///
   /// In en, this message translates to:
@@ -326,11 +344,107 @@ abstract class AppLocalizations {
   /// **'简体中文'**
   String get settingsLanguageChinese;
 
-  /// No description provided for @settingsSave.
+  /// No description provided for @settingsSectionNotifications.
   ///
   /// In en, this message translates to:
-  /// **'Save Settings'**
-  String get settingsSave;
+  /// **'NOTIFICATIONS'**
+  String get settingsSectionNotifications;
+
+  /// No description provided for @settingsNotificationsClearHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear History'**
+  String get settingsNotificationsClearHistory;
+
+  /// No description provided for @settingsNotificationsResetBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Badge'**
+  String get settingsNotificationsResetBadge;
+
+  /// No description provided for @settingsClearHistoryDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear History?'**
+  String get settingsClearHistoryDialogTitle;
+
+  /// No description provided for @settingsClearHistoryDialogMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will remove all notification history cached on this device. This cannot be undone.'**
+  String get settingsClearHistoryDialogMessage;
+
+  /// No description provided for @settingsClearHistoryDialogConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get settingsClearHistoryDialogConfirm;
+
+  /// No description provided for @settingsClearHistoryDone.
+  ///
+  /// In en, this message translates to:
+  /// **'History cleared'**
+  String get settingsClearHistoryDone;
+
+  /// No description provided for @settingsResetBadgeDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Badge reset'**
+  String get settingsResetBadgeDone;
+
+  /// No description provided for @settingsSectionAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'ABOUT'**
+  String get settingsSectionAbout;
+
+  /// No description provided for @settingsAboutVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Version'**
+  String get settingsAboutVersion;
+
+  /// No description provided for @settingsAboutSourceCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Source Code'**
+  String get settingsAboutSourceCode;
+
+  /// No description provided for @settingsAboutLicenses.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Source Licenses'**
+  String get settingsAboutLicenses;
+
+  /// No description provided for @settingsSignOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign Out'**
+  String get settingsSignOut;
+
+  /// No description provided for @settingsSignOutDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign Out?'**
+  String get settingsSignOutDialogTitle;
+
+  /// No description provided for @settingsSignOutDialogMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will clear your server URL and API key and disconnect. You will need to re-enter them to reconnect.'**
+  String get settingsSignOutDialogMessage;
+
+  /// No description provided for @settingsSignOutDialogConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign Out'**
+  String get settingsSignOutDialogConfirm;
+
+  /// No description provided for @settingsSignedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed out'**
+  String get settingsSignedOut;
 
   /// Snack bar shown when saving settings throws
   ///

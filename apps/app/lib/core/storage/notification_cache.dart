@@ -98,4 +98,16 @@ class NotificationCache {
       debugPrint('[Cache] clear failed: $e');
     }
   }
+
+  /// Remove only the cached history entries, leaving any pending
+  /// notifications and the last-sync timestamp intact. Used by
+  /// Settings → Clear History.
+  Future<void> clearHistory() async {
+    try {
+      final prefs = await _instance;
+      await prefs.remove(_historyKey);
+    } catch (e) {
+      debugPrint('[Cache] clearHistory failed: $e');
+    }
+  }
 }

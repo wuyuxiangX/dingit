@@ -27,6 +27,10 @@
   "historyEmpty": "暂无历史",
 
   "settingsTitle": "设置",
+  "settingsDone": "完成",
+
+  "commonCancel": "取消",
+
   "settingsSectionServer": "服务器",
   "settingsServerAddress": "地址",
   "settingsServerPlaceholder": "http://localhost:8080",
@@ -39,6 +43,7 @@
   "settingsAuthApiKeyPlaceholder": "输入 API Key",
   "settingsAuthApiKeyHint": "API Key 已在本设备加密存储。",
 
+  "settingsSectionPreferences": "偏好",
   "settingsSectionAppearance": "外观",
   "settingsAppearanceAuto": "跟随系统",
   "settingsAppearanceLight": "浅色",
@@ -49,7 +54,27 @@
   "settingsLanguageEnglish": "English",
   "settingsLanguageChinese": "简体中文",
 
-  "settingsSave": "保存设置",
+  "settingsSectionNotifications": "通知管理",
+  "settingsNotificationsClearHistory": "清除历史",
+  "settingsNotificationsResetBadge": "清除角标",
+
+  "settingsClearHistoryDialogTitle": "清除历史？",
+  "settingsClearHistoryDialogMessage": "这将删除此设备上缓存的所有通知历史，且无法撤销。",
+  "settingsClearHistoryDialogConfirm": "清除",
+  "settingsClearHistoryDone": "历史已清除",
+  "settingsResetBadgeDone": "角标已清除",
+
+  "settingsSectionAbout": "关于",
+  "settingsAboutVersion": "版本",
+  "settingsAboutSourceCode": "源代码",
+  "settingsAboutLicenses": "开源许可",
+
+  "settingsSignOut": "退出登录",
+  "settingsSignOutDialogTitle": "退出登录？",
+  "settingsSignOutDialogMessage": "这将清除服务器地址和 API Key 并断开连接。重新连接时需要重新输入。",
+  "settingsSignOutDialogConfirm": "退出",
+  "settingsSignedOut": "已退出",
+
   "settingsSaveFailed": "保存失败：{error}",
 
   "detailNotFound": "通知不存在",

@@ -10,6 +10,22 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 enum WsConnectionState { disconnected, connecting, connected }
 
 class WsClient {
+  /// How long a single connect attempt is allowed to hang before we give
+  /// up and mark the attempt failed. Previously 15s, which made a bad
+  /// server URL dominate the app's first 60+ seconds of startup while the
+  /// backoff played out. 5s matches the health-check timeout used in the
+  /// Settings page's `_testConnection` and is long enough for a healthy
+  /// Wi-Fi handshake.
+  static const _connectTimeout = Duration(seconds: 5);
+
+  /// Cap on the exponential backoff reconnect loop. After this many
+  /// consecutive failures we stop auto-reconnecting and sit in
+  /// `disconnected`. The user can force a reconnect by saving the
+  /// settings page (which calls `reconnectWithUrl`), which resets the
+  /// counter. Without this cap the client would spin forever against an
+  /// unreachable URL, draining battery and log volume.
+  static const _maxReconnectAttempts = 5;
+
   String url;
   String? apiKey;
   final void Function(WsMessage message) onMessage;
@@ -62,7 +78,7 @@ class WsClient {
         headers['X-API-Key'] = apiKey;
       }
       _channel = IOWebSocketChannel.connect(uri, headers: headers);
-      await _channel!.ready.timeout(const Duration(seconds: 15));
+      await _channel!.ready.timeout(_connectTimeout);
 
       if (_disposed) {
         _channel?.sink.close();
@@ -136,6 +152,14 @@ class WsClient {
     if (_disposed) return;
     _reconnectTimer?.cancel();
     _pingTimer?.cancel();
+
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      debugPrint(
+        '[WsClient] Giving up after $_reconnectAttempts attempts. '
+        'Will retry when settings are saved.',
+      );
+      return;
+    }
 
     final delay = min(30, pow(2, _reconnectAttempts).toInt());
     _reconnectAttempts++;

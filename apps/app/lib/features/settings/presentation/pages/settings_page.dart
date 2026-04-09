@@ -1,19 +1,28 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/locale/locale_context_ext.dart';
 import '../../../../app/locale/locale_provider.dart';
 import '../../../../app/theme/theme_context_ext.dart';
 import '../../../../app/theme/theme_mode_provider.dart';
+import '../../../../core/push/badge_service.dart';
+import '../../../../core/ui/undo_pill.dart';
 import '../../../../l10n/gen/app_localizations.dart';
+import '../../../notifications/providers/history_provider.dart';
 import '../../../notifications/providers/notifications_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../widgets/settings_tile.dart';
+
+/// Source code URL shown in the About section.
+const _kSourceCodeUrl = 'https://github.com/wuyuxiangX/dingit';
 
 // -- Page ---------------------------------------------------------------------
 
@@ -30,6 +39,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _obscureApiKey = true;
   bool _isTesting = false;
   _TestResult? _testResult;
+  String _appVersion = '';
 
   @override
   void initState() {
@@ -45,6 +55,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _testConnection();
       }
     });
+
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() => _appVersion = '${info.version} (${info.buildNumber})');
+    } catch (_) {
+      // Non-fatal — the About row will just show an empty value.
+    }
   }
 
   @override
@@ -107,7 +129,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  Future<void> _save() async {
+  /// Persist server URL + API key, reconnect the WebSocket, and pop back
+  /// to the previous route. This is the action wired to the AppBar
+  /// trailing "Done" button — Settings now follows the iOS pattern where
+  /// the top-right action saves and closes instead of having a dedicated
+  /// Save button at the bottom of the form.
+  Future<void> _saveAndClose() async {
     final serverUrl = _serverUrlController.text.trim();
     final apiKey = _apiKeyController.text.trim();
 
@@ -119,25 +146,124 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
       final wsClient = ref.read(wsClientProvider);
       final settings = ref.read(settingsProvider);
-      await wsClient.reconnectWithUrl(settings.wsUrl, newApiKey: settings.apiKey);
+      await wsClient.reconnectWithUrl(settings.wsUrl,
+          newApiKey: settings.apiKey);
 
       if (mounted) context.pop();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              context.l10n.settingsSaveFailed(e.toString()),
-              style: settingsLabelStyle(context)
-                  .copyWith(color: context.colors.onError),
-            ),
-            backgroundColor: context.colors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
+        // Use the same HUD-style pill as every other Settings toast, with
+        // an error icon tinted red so it reads as a failure instead of a
+        // confirmation. No undo — the caller can simply press Done again.
+        showUndoPill(
+          context,
+          message: context.l10n.settingsSaveFailed(e.toString()),
+          icon: LucideIcons.alertCircle,
+          iconColor: const Color(0xFFFF6961),
+          duration: const Duration(seconds: 3),
         );
       }
     }
+  }
+
+  Future<void> _clearHistory() async {
+    final l10n = context.l10n;
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(l10n.settingsClearHistoryDialogTitle),
+        content: Text(l10n.settingsClearHistoryDialogMessage),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.commonCancel),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.settingsClearHistoryDialogConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await ref.read(historyProvider.notifier).clearLocal();
+
+    if (!mounted) return;
+    showUndoPill(
+      context,
+      message: l10n.settingsClearHistoryDone,
+      icon: LucideIcons.trash2,
+      duration: const Duration(seconds: 2),
+    );
+  }
+
+  Future<void> _resetBadge() async {
+    await BadgeService.clear();
+    if (!mounted) return;
+    showUndoPill(
+      context,
+      message: context.l10n.settingsResetBadgeDone,
+      icon: LucideIcons.bellOff,
+      duration: const Duration(seconds: 2),
+    );
+  }
+
+  Future<void> _signOut() async {
+    final l10n = context.l10n;
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(l10n.settingsSignOutDialogTitle),
+        content: Text(l10n.settingsSignOutDialogMessage),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.commonCancel),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.settingsSignOutDialogConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // Tear the session down. Clearing the settings state causes
+    // `wsClientProvider` to rebuild and dispose the existing WsClient;
+    // the new client sees an empty serverUrl and skips auto-connect
+    // (see the guard in notifications_provider.dart). We still nuke the
+    // cache up front so the UI flashes empty immediately instead of
+    // waiting for the providers to rebuild.
+    await ref.read(notificationCacheProvider).clear();
+    await ref.read(settingsProvider.notifier).signOut();
+
+    if (!mounted) return;
+    _serverUrlController.clear();
+    _apiKeyController.clear();
+    setState(() => _testResult = null);
+    showUndoPill(
+      context,
+      message: l10n.settingsSignedOut,
+      icon: LucideIcons.logOut,
+      duration: const Duration(seconds: 2),
+    );
+  }
+
+  Future<void> _openSourceCode() async {
+    final uri = Uri.parse(_kSourceCodeUrl);
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  void _openLicensePage() {
+    showLicensePage(
+      context: context,
+      applicationName: context.l10n.appTitle,
+      applicationVersion: _appVersion,
+    );
   }
 
   @override
@@ -173,11 +299,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          TextButton(
+            onPressed: _saveAndClose,
+            style: TextButton.styleFrom(
+              foregroundColor: colors.primary,
+              textStyle: GoogleFonts.plusJakartaSans(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            child: Text(l10n.settingsDone),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
         children: [
-          // ── Server section ──────────────────────────────────
+          // ── Server ──────────────────────────────────────────
           SettingsSectionTitle(l10n.settingsSectionServer),
           SettingsCard(
             children: [
@@ -205,7 +344,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
           const SizedBox(height: 24),
 
-          // ── Authentication section ──────────────────────────
+          // ── Authentication ──────────────────────────────────
           SettingsSectionTitle(l10n.settingsSectionAuth),
           SettingsCard(
             children: [
@@ -215,13 +354,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 placeholder: l10n.settingsAuthApiKeyPlaceholder,
                 obscureText: _obscureApiKey,
                 suffixIcon: GestureDetector(
-                  onTap: () => setState(() => _obscureApiKey = !_obscureApiKey),
+                  onTap: () =>
+                      setState(() => _obscureApiKey = !_obscureApiKey),
                   child: Icon(
                     _obscureApiKey ? LucideIcons.eyeOff : LucideIcons.eye,
                     size: 17,
                     color: colors.onSurfaceVariant,
                   ),
                 ),
+              ),
+              const SettingsTileDivider(),
+              SettingsActionTile(
+                icon: LucideIcons.logOut,
+                label: l10n.settingsSignOut,
+                onTap: _signOut,
+                iconColor: colors.error,
+                labelColor: colors.error,
               ),
             ],
           ),
@@ -237,12 +385,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           ),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
-          // ── Appearance ──────────────────────────────────────
-          // Tap → push /settings/appearance sub-page. Current value is shown
-          // in the trailing slot so the tile reads e.g. "Appearance   Dark ›"
-          // — same pattern as iOS Settings > Display & Brightness.
+          // ── Preferences ────────────────────────────────────
+          // Appearance and Language share a single grouped card so the
+          // section reads as one semantic unit ("things about how the
+          // app looks and sounds").
+          SettingsSectionTitle(l10n.settingsSectionPreferences),
           SettingsCard(
             children: [
               SettingsActionTile(
@@ -253,14 +402,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   _themeModeLabel(l10n, themeMode),
                 ),
               ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // ── Language ────────────────────────────────────────
-          SettingsCard(
-            children: [
+              const SettingsTileDivider(),
               SettingsActionTile(
                 icon: LucideIcons.globe,
                 label: l10n.settingsSectionLanguage,
@@ -272,17 +414,66 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ],
           ),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
-          // ── Save ────────────────────────────────────────────
+          // ── Notifications management ───────────────────────
+          SettingsSectionTitle(l10n.settingsSectionNotifications),
           SettingsCard(
             children: [
               SettingsActionTile(
-                icon: LucideIcons.check,
-                label: l10n.settingsSave,
-                onTap: _save,
-                iconColor: colors.primary,
-                labelColor: colors.primary,
+                icon: LucideIcons.trash2,
+                label: l10n.settingsNotificationsClearHistory,
+                onTap: _clearHistory,
+              ),
+              const SettingsTileDivider(),
+              SettingsActionTile(
+                icon: LucideIcons.bellOff,
+                label: l10n.settingsNotificationsResetBadge,
+                onTap: _resetBadge,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── About ───────────────────────────────────────────
+          SettingsSectionTitle(l10n.settingsSectionAbout),
+          SettingsCard(
+            children: [
+              SettingsActionTile(
+                icon: LucideIcons.info,
+                label: l10n.settingsAboutVersion,
+                onTap: null,
+                trailing: Text(
+                  _appVersion,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                    color: context.palette.inkFaint,
+                  ),
+                ),
+              ),
+              const SettingsTileDivider(),
+              SettingsActionTile(
+                icon: LucideIcons.github,
+                label: l10n.settingsAboutSourceCode,
+                onTap: _openSourceCode,
+                trailing: Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: context.palette.inkFaint,
+                ),
+              ),
+              const SettingsTileDivider(),
+              SettingsActionTile(
+                icon: LucideIcons.fileText,
+                label: l10n.settingsAboutLicenses,
+                onTap: _openLicensePage,
+                trailing: Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: context.palette.inkFaint,
+                ),
               ),
             ],
           ),

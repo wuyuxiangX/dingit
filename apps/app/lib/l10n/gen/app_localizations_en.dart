@@ -69,6 +69,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTitle => 'Settings';
 
   @override
+  String get settingsDone => 'Done';
+
+  @override
+  String get commonCancel => 'Cancel';
+
+  @override
   String get settingsSectionServer => 'SERVER';
 
   @override
@@ -100,6 +106,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your API key is encrypted and stored securely on this device.';
 
   @override
+  String get settingsSectionPreferences => 'PREFERENCES';
+
+  @override
   String get settingsSectionAppearance => 'Appearance';
 
   @override
@@ -124,7 +133,57 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsLanguageChinese => '简体中文';
 
   @override
-  String get settingsSave => 'Save Settings';
+  String get settingsSectionNotifications => 'NOTIFICATIONS';
+
+  @override
+  String get settingsNotificationsClearHistory => 'Clear History';
+
+  @override
+  String get settingsNotificationsResetBadge => 'Reset Badge';
+
+  @override
+  String get settingsClearHistoryDialogTitle => 'Clear History?';
+
+  @override
+  String get settingsClearHistoryDialogMessage =>
+      'This will remove all notification history cached on this device. This cannot be undone.';
+
+  @override
+  String get settingsClearHistoryDialogConfirm => 'Clear';
+
+  @override
+  String get settingsClearHistoryDone => 'History cleared';
+
+  @override
+  String get settingsResetBadgeDone => 'Badge reset';
+
+  @override
+  String get settingsSectionAbout => 'ABOUT';
+
+  @override
+  String get settingsAboutVersion => 'Version';
+
+  @override
+  String get settingsAboutSourceCode => 'Source Code';
+
+  @override
+  String get settingsAboutLicenses => 'Open Source Licenses';
+
+  @override
+  String get settingsSignOut => 'Sign Out';
+
+  @override
+  String get settingsSignOutDialogTitle => 'Sign Out?';
+
+  @override
+  String get settingsSignOutDialogMessage =>
+      'This will clear your server URL and API key and disconnect. You will need to re-enter them to reconnect.';
+
+  @override
+  String get settingsSignOutDialogConfirm => 'Sign Out';
+
+  @override
+  String get settingsSignedOut => 'Signed out';
 
   @override
   String settingsSaveFailed(String error) {

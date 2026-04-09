@@ -92,4 +92,18 @@ class SettingsNotifier extends Notifier<SettingsState> {
       ref.notifyListeners();
     }
   }
+
+  /// Sign out: clear persisted server URL + API key and reset the in-memory
+  /// state. The caller is responsible for disconnecting the active WebSocket
+  /// and clearing any notification caches.
+  Future<void> signOut() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_serverUrlKey);
+    await _secureStorage.delete(key: _apiKeyStorageKey);
+    state = const SettingsState(
+      serverUrl: '',
+      apiKey: '',
+      isLoaded: true,
+    );
+  }
 }

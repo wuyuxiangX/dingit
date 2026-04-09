@@ -69,6 +69,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsTitle => '设置';
 
   @override
+  String get settingsDone => '完成';
+
+  @override
+  String get commonCancel => '取消';
+
+  @override
   String get settingsSectionServer => '服务器';
 
   @override
@@ -99,6 +105,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAuthApiKeyHint => 'API Key 已在本设备加密存储。';
 
   @override
+  String get settingsSectionPreferences => '偏好';
+
+  @override
   String get settingsSectionAppearance => '外观';
 
   @override
@@ -123,7 +132,56 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLanguageChinese => '简体中文';
 
   @override
-  String get settingsSave => '保存设置';
+  String get settingsSectionNotifications => '通知管理';
+
+  @override
+  String get settingsNotificationsClearHistory => '清除历史';
+
+  @override
+  String get settingsNotificationsResetBadge => '清除角标';
+
+  @override
+  String get settingsClearHistoryDialogTitle => '清除历史？';
+
+  @override
+  String get settingsClearHistoryDialogMessage => '这将删除此设备上缓存的所有通知历史，且无法撤销。';
+
+  @override
+  String get settingsClearHistoryDialogConfirm => '清除';
+
+  @override
+  String get settingsClearHistoryDone => '历史已清除';
+
+  @override
+  String get settingsResetBadgeDone => '角标已清除';
+
+  @override
+  String get settingsSectionAbout => '关于';
+
+  @override
+  String get settingsAboutVersion => '版本';
+
+  @override
+  String get settingsAboutSourceCode => '源代码';
+
+  @override
+  String get settingsAboutLicenses => '开源许可';
+
+  @override
+  String get settingsSignOut => '退出登录';
+
+  @override
+  String get settingsSignOutDialogTitle => '退出登录？';
+
+  @override
+  String get settingsSignOutDialogMessage =>
+      '这将清除服务器地址和 API Key 并断开连接。重新连接时需要重新输入。';
+
+  @override
+  String get settingsSignOutDialogConfirm => '退出';
+
+  @override
+  String get settingsSignedOut => '已退出';
 
   @override
   String settingsSaveFailed(String error) {
