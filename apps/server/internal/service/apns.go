@@ -107,7 +107,7 @@ func (s *ApnsService) baseURL() string {
 }
 
 // SendToAll sends push notification to all iOS devices via APNs
-func (s *ApnsService) SendToAll(ctx context.Context, n *model.Notification) {
+func (s *ApnsService) SendToAll(ctx context.Context, n *model.Notification, badgeCount int) {
 	devices, err := s.deviceSvc.ListByPlatform(ctx, "ios")
 	if err != nil {
 		logger.Error("Failed to list iOS device tokens", zap.Error(err))
@@ -121,11 +121,11 @@ func (s *ApnsService) SendToAll(ctx context.Context, n *model.Notification) {
 	logger.Info("Sending APNs push", zap.Int("devices", len(devices)), zap.String("title", n.Title))
 
 	for _, token := range devices {
-		go s.sendToDevice(ctx, token, n)
+		go s.sendToDevice(ctx, token, n, badgeCount)
 	}
 }
 
-func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *model.Notification) {
+func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *model.Notification, badgeCount int) {
 	jwtToken, err := s.getJWT()
 	if err != nil {
 		logger.Error("Failed to get APNs JWT", zap.Error(err))
@@ -139,7 +139,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 				"body":  n.Body,
 			},
 			"sound": "default",
-			"badge": 1,
+			"badge": badgeCount,
 		},
 		"notification_id": n.ID,
 		"source":          n.Source,

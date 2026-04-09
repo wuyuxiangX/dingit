@@ -24,4 +24,9 @@ import FirebaseCore
   ) {
     super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
   }
+
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    // Clear badge when app comes to foreground
+    application.applicationIconBadgeNumber = 0
+  }
 }

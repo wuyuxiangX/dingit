@@ -30,9 +30,9 @@ func NewPushRouter(apns *ApnsService, fcm *FcmService) *PushRouter {
 }
 
 // SendToAll sends push to all registered devices via appropriate channels.
-func (r *PushRouter) SendToAll(ctx context.Context, n *model.Notification) {
+func (r *PushRouter) SendToAll(ctx context.Context, n *model.Notification, badgeCount int) {
 	if r.apns != nil {
-		go r.apns.SendToAll(ctx, n)
+		go r.apns.SendToAll(ctx, n, badgeCount)
 	}
 	if r.fcm != nil {
 		go r.fcm.SendToAll(ctx, n)

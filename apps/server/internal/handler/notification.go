@@ -100,8 +100,10 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 
 	h.hub.Broadcast(model.NewNotificationNewMsg(created))
 
-	// Send push notification to all registered devices
-	h.pushRouter.SendToAll(context.Background(), created)
+	// Send push notification with current pending count as badge
+	pending := model.StatusPending
+	pendingCount, _ := h.store.Count(c.Request.Context(), &pending, nil)
+	h.pushRouter.SendToAll(context.Background(), created, pendingCount)
 
 	response.Created(c, gin.H{
 		"id":        created.ID,
