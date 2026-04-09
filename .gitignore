@@ -45,3 +45,7 @@ apps/server/dingit-server
 .dingit.yaml
 .env
 secrets/
+
+# Firebase credentials
+apps/app/ios/Runner/GoogleService-Info.plist
+apps/app/android/app/google-services.json
