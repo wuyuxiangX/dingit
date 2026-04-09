@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../app/theme/app_colors.dart';
+import '../../../../app/theme/theme_mode_provider.dart';
 import '../../../notifications/providers/notifications_provider.dart';
 import '../../providers/settings_provider.dart';
 
@@ -70,18 +71,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _testConnection() async {
-    setState(() {
-      _isTesting = true;
-      _testResult = null;
-    });
+    if (_isTesting) return;
+    setState(() => _isTesting = true);
 
+    _TestResult? nextResult;
     try {
       final url = _serverUrlController.text.trim();
       final apiKey = _apiKeyController.text.trim();
 
       final uri = Uri.parse('$url/health');
-      final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 5);
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 5);
 
       try {
         final request = await client.getUrl(uri);
@@ -89,22 +89,38 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           request.headers.set('Authorization', 'Bearer $apiKey');
         }
         final response = await request.close();
-
-        if (response.statusCode == 200) {
-          setState(() => _testResult = const _TestResult.success());
-        } else {
-          setState(
-            () => _testResult = _TestResult.failure('HTTP ${response.statusCode}'),
-          );
-        }
+        nextResult = response.statusCode == 200
+            ? const _TestResult.success()
+            : _TestResult.failure('HTTP ${response.statusCode}');
       } finally {
         client.close();
       }
     } catch (e) {
-      setState(() => _testResult = _TestResult.failure(e.toString()));
+      nextResult = _TestResult.failure(e.toString());
     } finally {
-      setState(() => _isTesting = false);
+      if (mounted) {
+        setState(() {
+          _isTesting = false;
+          _testResult = nextResult;
+        });
+      }
     }
+  }
+
+  Widget _buildTestTrailing() {
+    final result = _testResult;
+    if (result != null) {
+      return _StatusBadge(
+        key: ValueKey(result.isSuccess ? 'ok' : 'fail'),
+        result: result,
+      );
+    }
+    return const Icon(
+      LucideIcons.chevronRight,
+      key: ValueKey('chev'),
+      size: 16,
+      color: AppColors.inkFaint,
+    );
   }
 
   Future<void> _save() async {
@@ -185,9 +201,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 label: 'Test Connection',
                 onTap: _isTesting ? null : _testConnection,
                 isLoading: _isTesting,
-                trailing: _testResult != null
-                    ? _StatusBadge(result: _testResult!)
-                    : const Icon(LucideIcons.chevronRight, size: 16, color: AppColors.inkFaint),
+                trailing: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  transitionBuilder: (child, anim) =>
+                      FadeTransition(opacity: anim, child: child),
+                  child: _buildTestTrailing(),
+                ),
               ),
             ],
           ),
@@ -228,6 +247,32 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
           const SizedBox(height: 32),
 
+          // ── Appearance ──────────────────────────────────────
+          const _SectionTitle('Appearance'),
+          _Card(
+            children: [
+              _ThemeModeTile(
+                icon: LucideIcons.smartphone,
+                label: 'Auto',
+                mode: ThemeMode.system,
+              ),
+              const _TileDivider(),
+              _ThemeModeTile(
+                icon: LucideIcons.sun,
+                label: 'Light',
+                mode: ThemeMode.light,
+              ),
+              const _TileDivider(),
+              _ThemeModeTile(
+                icon: LucideIcons.moon,
+                label: 'Dark',
+                mode: ThemeMode.dark,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 32),
+
           // ── Save ────────────────────────────────────────────
           _Card(
             children: [
@@ -242,6 +287,40 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// -- Theme mode row ----------------------------------------------------------
+
+class _ThemeModeTile extends ConsumerWidget {
+  final IconData icon;
+  final String label;
+  final ThemeMode mode;
+
+  const _ThemeModeTile({
+    required this.icon,
+    required this.label,
+    required this.mode,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final current = ref.watch(themeModeProvider);
+    final selected = current == mode;
+    return _ActionTile(
+      icon: icon,
+      label: label,
+      onTap: () => ref.read(themeModeProvider.notifier).set(mode),
+      iconColor: selected ? AppColors.accent : AppColors.ink,
+      labelColor: selected ? AppColors.accent : AppColors.ink,
+      trailing: selected
+          ? const Icon(
+              LucideIcons.check,
+              size: 16,
+              color: AppColors.accent,
+            )
+          : const SizedBox.shrink(),
     );
   }
 }
@@ -398,14 +477,31 @@ class _ActionTile extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 13, 14, 13),
           child: Row(
             children: [
-              if (isLoading)
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: ic),
-                )
-              else
-                Icon(icon, size: 18, color: ic),
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 160),
+                  transitionBuilder: (child, anim) =>
+                      FadeTransition(opacity: anim, child: child),
+                  child: isLoading
+                      ? SizedBox(
+                          key: const ValueKey('spin'),
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: ic,
+                          ),
+                        )
+                      : Icon(
+                          icon,
+                          key: const ValueKey('icon'),
+                          size: 18,
+                          color: ic,
+                        ),
+                ),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -443,7 +539,7 @@ class _TestResult {
 
 class _StatusBadge extends StatelessWidget {
   final _TestResult result;
-  const _StatusBadge({required this.result});
+  const _StatusBadge({super.key, required this.result});
 
   @override
   Widget build(BuildContext context) {

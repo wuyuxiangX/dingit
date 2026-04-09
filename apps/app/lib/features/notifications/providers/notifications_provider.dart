@@ -30,6 +30,13 @@ final wsClientProvider = Provider<WsClient>((ref) {
     lastSyncAt: notifier._lastSyncAt,
   );
   ref.onDispose(() => client.disconnect());
+  // Auto-connect once settings have been hydrated from storage. Without
+  // this guard the very first build runs with an unconfigured default URL
+  // and silently leaves the rebuilt client disconnected after settings
+  // load asynchronously.
+  if (settings.isLoaded) {
+    client.connect();
+  }
   return client;
 });
 

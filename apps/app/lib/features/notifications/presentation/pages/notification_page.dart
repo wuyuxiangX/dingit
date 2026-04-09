@@ -7,6 +7,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/push/badge_service.dart';
+import '../../../../core/ui/undo_pill.dart';
 import '../../../../core/websocket/ws_client.dart';
 import '../../../settings/providers/settings_provider.dart';
 import '../../providers/notifications_provider.dart';
@@ -28,30 +29,31 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(wsClientProvider).connect();
+      // wsClientProvider auto-connects once settings are hydrated; no
+      // manual connect() call needed here. Just touch it to ensure the
+      // provider is created if nothing else has read it yet.
+      ref.read(wsClientProvider);
       // Sync iOS badge to current pending count as soon as the page mounts.
       // This overrides the AppDelegate's unconditional clear-to-0 with the
       // authoritative value (what the user actually sees in the card stack).
       final pendingNow = ref.read(pendingNotificationsProvider).length;
       BadgeService.setCount(pendingNow);
 
-      // Surface commit failures from the notifications notifier as a red
-      // snackbar so the user knows something went wrong instead of silently
-      // watching the card pop back.
+      // Surface commit failures from the notifications notifier as an
+      // error pill so the user knows something went wrong instead of
+      // silently watching the card pop back.
       _errorSub = ref
           .read(notificationsProvider.notifier)
           .errorStream
           .listen((msg) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context)
-          ..removeCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(msg),
-              backgroundColor: AppColors.destructive,
-              duration: const Duration(seconds: 3),
-            ),
-          );
+        showUndoPill(
+          context,
+          message: msg,
+          icon: LucideIcons.alertCircle,
+          iconColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 3),
+        );
       });
 
       ref.listenManual(settingsProvider, (prev, next) {
@@ -72,20 +74,14 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
   void _dismissWithUndo(String id) {
     final notifier = ref.read(notificationsProvider.notifier);
     notifier.dismissNotification(id);
-    ScaffoldMessenger.of(context)
-      ..removeCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: const Text('已取消'),
-          // Must match NotificationsNotifier._commitDelay so the snackbar
-          // disappears just as the commit fires.
-          duration: const Duration(seconds: 4),
-          action: SnackBarAction(
-            label: '撤销',
-            onPressed: () => notifier.undoDismiss(id),
-          ),
-        ),
-      );
+    // Duration must match NotificationsNotifier._commitDelay so the pill
+    // fades out just as the delayed PATCH fires.
+    showUndoPill(
+      context,
+      message: '已取消',
+      undoLabel: '撤销',
+      onUndo: () => notifier.undoDismiss(id),
+    );
   }
 
   @override
