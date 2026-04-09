@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dingit_shared/dingit_shared.dart';
@@ -33,6 +34,10 @@ class _CardStackState extends State<CardStack>
   Animation<double>? _rotationAnimation;
   bool _isDragging = false;
   Offset _dragOffset = Offset.zero;
+  // Captured at _onPanStart so that the animation completion callback operates
+  // on the card the user actually started dragging, even if `widget.notifications`
+  // mutates mid-animation (e.g. a new notification arrives via WebSocket).
+  NotificationModel? _draggingCard;
 
   static const _maxVisible = 3;
   static const _swipeThreshold = 100.0;
@@ -57,6 +62,10 @@ class _CardStackState extends State<CardStack>
   void _onPanStart(DragStartDetails details) {
     _isDragging = true;
     _dragOffset = Offset.zero;
+    _draggingCard = widget.notifications.isNotEmpty
+        ? widget.notifications.first
+        : null;
+    HapticFeedback.selectionClick();
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
@@ -80,6 +89,8 @@ class _CardStackState extends State<CardStack>
   }
 
   void _animateSwipeAway(bool toRight) {
+    HapticFeedback.lightImpact();
+
     final screenWidth = MediaQuery.sizeOf(context).width;
     final targetX = toRight ? screenWidth * 1.5 : -screenWidth * 1.5;
 
@@ -94,13 +105,13 @@ class _CardStackState extends State<CardStack>
     ).animate(_animController);
 
     _animController.forward(from: 0).then((_) {
-      if (widget.notifications.isNotEmpty) {
-        final top = widget.notifications.first;
-        if (toRight && top.actions.isNotEmpty) {
-          widget.onAction(top, top.actions.first.value);
-        } else {
-          widget.onDismiss(top);
-        }
+      // Use the card captured in _onPanStart — NOT widget.notifications.first —
+      // otherwise a notification that arrived mid-animation could be dismissed
+      // instead of the one the user swiped. Both left and right swipes map to
+      // dismiss so users never trigger a hidden action by accident.
+      final card = _draggingCard;
+      if (card != null) {
+        widget.onDismiss(card);
       }
       _reset();
     });
@@ -127,6 +138,7 @@ class _CardStackState extends State<CardStack>
       _rotationAnimation = null;
     });
     _animController.reset();
+    _draggingCard = null;
   }
 
   @override
