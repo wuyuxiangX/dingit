@@ -50,9 +50,6 @@ jobs:
   app:
     name: App (Flutter)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/app
     steps:
       - uses: actions/checkout@v4
 
@@ -60,12 +57,22 @@ jobs:
         with:
           channel: stable
 
+      # Generate freezed/json_serializable code for shared package
+      - run: dart pub get
+        working-directory: packages/dingit_shared
+
+      - run: dart run build_runner build --delete-conflicting-outputs
+        working-directory: packages/dingit_shared
+
       - run: flutter pub get
+        working-directory: apps/app
 
       - run: flutter analyze
+        working-directory: apps/app
 
       - run: flutter test
         if: hashFiles('apps/app/test/**') != ''
+        working-directory: apps/app
 
   docker:
     name: Docker Build
