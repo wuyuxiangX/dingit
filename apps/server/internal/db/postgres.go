@@ -7,7 +7,29 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Connect opens a pgx connection pool, pings it, and applies any pending
+// versioned migrations via goose before returning. This is the normal entry
+// point used by the server's main boot path.
 func Connect(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
+	pool, err := ConnectWithoutMigrate(ctx, databaseURL)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := RunMigrations(ctx, pool); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("migration failed: %w", err)
+	}
+
+	return pool, nil
+}
+
+// ConnectWithoutMigrate opens a pgx connection pool and pings it, but does
+// NOT run migrations. It's used by CLI-only short-circuits like
+// --migrate-status, where we want to inspect the current migration state
+// without applying anything, and by --migrate-only, which applies migrations
+// explicitly and then exits without starting the server.
+func ConnectWithoutMigrate(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to database: %w", err)
@@ -18,61 +40,5 @@ func Connect(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
 
-	if err := migrate(ctx, pool); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("migration failed: %w", err)
-	}
-
 	return pool, nil
-}
-
-func migrate(ctx context.Context, pool *pgxpool.Pool) error {
-	query := `
-	CREATE TABLE IF NOT EXISTS notifications (
-		id              TEXT PRIMARY KEY,
-		title           TEXT NOT NULL,
-		body            TEXT NOT NULL,
-		source          TEXT NOT NULL DEFAULT 'unknown',
-		status          TEXT NOT NULL DEFAULT 'pending',
-		priority        TEXT NOT NULL DEFAULT 'normal',
-		actions         JSONB NOT NULL DEFAULT '[]',
-		callback_url    TEXT,
-		metadata        JSONB,
-		actioned_value  TEXT,
-		created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		actioned_at     TIMESTAMPTZ,
-		expires_at      TIMESTAMPTZ
-	);
-
-	CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status);
-	CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
-
-	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal';
-	CREATE INDEX IF NOT EXISTS idx_notifications_priority ON notifications(priority);
-
-	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS icon TEXT;
-
-	CREATE INDEX IF NOT EXISTS idx_notifications_expires ON notifications(expires_at)
-		WHERE expires_at IS NOT NULL AND status = 'pending';
-
-	CREATE TABLE IF NOT EXISTS api_keys (
-		id           TEXT PRIMARY KEY,
-		name         TEXT NOT NULL DEFAULT '',
-		key_hash     TEXT NOT NULL UNIQUE,
-		prefix       TEXT NOT NULL DEFAULT '',
-		created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		last_used_at TIMESTAMPTZ
-	);
-
-	CREATE TABLE IF NOT EXISTS devices (
-		id         TEXT PRIMARY KEY,
-		token      TEXT NOT NULL UNIQUE,
-		platform   TEXT NOT NULL DEFAULT 'ios',
-		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-	);
-	`
-
-	_, err := pool.Exec(ctx, query)
-	return err
 }

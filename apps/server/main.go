@@ -26,6 +26,8 @@ import (
 func main() {
 	// CLI flags
 	generateKey := flag.Bool("generate-key", false, "Generate a new API key and exit")
+	migrateOnly := flag.Bool("migrate-only", false, "Apply pending DB migrations and exit (no HTTP server)")
+	migrateStatus := flag.Bool("migrate-status", false, "Print DB migration status and exit (no HTTP server)")
 	flag.Parse()
 
 	if *generateKey {
@@ -52,6 +54,34 @@ func main() {
 	// App-wide context, cancelled on shutdown
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	defer ctxCancel()
+
+	// Migration-only CLI short-circuits. These run before any service
+	// wiring so operators can use them as init containers or one-shot
+	// admin commands without spinning up the full server.
+	if *migrateStatus {
+		pool, err := db.ConnectWithoutMigrate(ctx, cfg.Database.URL)
+		if err != nil {
+			logger.Fatal("Failed to connect to database", zap.Error(err))
+		}
+		defer pool.Close()
+		if err := db.PrintMigrationStatus(ctx, pool); err != nil {
+			logger.Fatal("Failed to read migration status", zap.Error(err))
+		}
+		return
+	}
+	if *migrateOnly {
+		pool, err := db.ConnectWithoutMigrate(ctx, cfg.Database.URL)
+		if err != nil {
+			logger.Fatal("Failed to connect to database", zap.Error(err))
+		}
+		defer pool.Close()
+		if err := db.RunMigrations(ctx, pool); err != nil {
+			logger.Fatal("Failed to run migrations", zap.Error(err))
+		}
+		logger.Info("Migrations applied")
+		return
+	}
+
 	pool, err := db.Connect(ctx, cfg.Database.URL)
 	if err != nil {
 		logger.Fatal("Failed to connect to database", zap.Error(err))
