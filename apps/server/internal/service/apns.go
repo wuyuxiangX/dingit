@@ -29,11 +29,19 @@ type ApnsConfig struct {
 	Sandbox bool   // true for development
 }
 
+// apnsConcurrency bounds how many sendToDevice goroutines may be
+// in-flight at once. Previously we spawned one goroutine per device
+// with no ceiling — 10k registered devices = 10k concurrent HTTPS calls
+// + 10k goroutines worth of stack. This semaphore caps it at a number
+// that saturates the APNs HTTP/2 connection without torching the box.
+const apnsConcurrency = 64
+
 type ApnsService struct {
 	cfg       ApnsConfig
 	key       *ecdsa.PrivateKey
 	deviceSvc *DeviceService
 	client    *http.Client
+	sem       chan struct{}
 
 	mu       sync.Mutex
 	jwtToken string
@@ -67,7 +75,17 @@ func NewApnsService(cfg ApnsConfig, deviceSvc *DeviceService) (*ApnsService, err
 		deviceSvc: deviceSvc,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
+			// Cap per-host TCP connections so an APNs HTTP/2 fan-out can
+			// reuse streams instead of opening a new TLS handshake per
+			// device. 100 is plenty — APNs HTTP/2 multiplexes up to
+			// thousands of streams per connection.
+			Transport: &http.Transport{
+				MaxConnsPerHost:     100,
+				MaxIdleConnsPerHost: 20,
+				IdleConnTimeout:     90 * time.Second,
+			},
 		},
+		sem: make(chan struct{}, apnsConcurrency),
 	}, nil
 }
 
@@ -106,7 +124,9 @@ func (s *ApnsService) baseURL() string {
 	return "https://api.push.apple.com"
 }
 
-// SendToAll sends push notification to all iOS devices via APNs
+// SendToAll sends push notification to all iOS devices via APNs. Each
+// device dispatch acquires the semaphore before doing any work, so the
+// total number of in-flight goroutines is bounded by apnsConcurrency.
 func (s *ApnsService) SendToAll(ctx context.Context, n *model.Notification, badgeCount int) {
 	devices, err := s.deviceSvc.ListByPlatform(ctx, "ios")
 	if err != nil {
@@ -121,7 +141,16 @@ func (s *ApnsService) SendToAll(ctx context.Context, n *model.Notification, badg
 	logger.Info("Sending APNs push", zap.Int("devices", len(devices)), zap.String("title", n.Title))
 
 	for _, token := range devices {
-		go s.sendToDevice(ctx, token, n, badgeCount)
+		token := token
+		go func() {
+			select {
+			case s.sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			defer func() { <-s.sem }()
+			s.sendToDevice(ctx, token, n, badgeCount)
+		}()
 	}
 }
 
@@ -203,7 +232,16 @@ func (s *ApnsService) SendSilentBadgeUpdate(ctx context.Context, badgeCount int)
 	logger.Info("Sending silent badge update", zap.Int("devices", len(devices)), zap.Int("badge", badgeCount))
 
 	for _, token := range devices {
-		go s.sendSilentBadge(ctx, token, badgeCount)
+		token := token
+		go func() {
+			select {
+			case s.sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			defer func() { <-s.sem }()
+			s.sendSilentBadge(ctx, token, badgeCount)
+		}()
 	}
 }
 

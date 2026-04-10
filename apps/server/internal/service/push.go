@@ -50,10 +50,15 @@ func (r *PushRouter) UpdateBadge(ctx context.Context, badgeCount int) {
 
 // --- FCM Service (for Android, requires Google services / VPN in China) ---
 
+// fcmConcurrency bounds how many sendToDevice goroutines may be
+// in-flight at once. Same reasoning as apnsConcurrency.
+const fcmConcurrency = 64
+
 type FcmService struct {
 	projectID string
 	deviceSvc *DeviceService
 	client    *http.Client
+	sem       chan struct{}
 	mu        sync.Mutex
 	token     string
 	tokenExp  time.Time
@@ -61,7 +66,12 @@ type FcmService struct {
 }
 
 func NewFcmService(projectID string, deviceSvc *DeviceService) (*FcmService, error) {
-	ctx := context.Background()
+	// Bound the credential discovery so a slow/unreachable metadata
+	// server can't block the server's boot path indefinitely. 10s is
+	// the same budget as the HTTP client — long enough for a cold
+	// start, short enough that operators notice during a rollback.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	creds, err := google.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/firebase.messaging")
 	if err != nil {
 		return nil, fmt.Errorf("find credentials: %w", err)
@@ -70,8 +80,16 @@ func NewFcmService(projectID string, deviceSvc *DeviceService) (*FcmService, err
 	return &FcmService{
 		projectID: projectID,
 		deviceSvc: deviceSvc,
-		client:    &http.Client{Timeout: 10 * time.Second},
-		creds:     creds,
+		client: &http.Client{
+			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				MaxConnsPerHost:     100,
+				MaxIdleConnsPerHost: 20,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		},
+		creds: creds,
+		sem:   make(chan struct{}, fcmConcurrency),
 	}, nil
 }
 
@@ -93,7 +111,8 @@ func (s *FcmService) getAccessToken(ctx context.Context) (string, error) {
 	return s.token, nil
 }
 
-// SendToAll sends push notification to all Android devices via FCM
+// SendToAll sends push notification to all Android devices via FCM.
+// Semaphore-bounded the same way APNs is — see apns.go for rationale.
 func (s *FcmService) SendToAll(ctx context.Context, n *model.Notification) {
 	tokens, err := s.deviceSvc.ListByPlatform(ctx, "android")
 	if err != nil {
@@ -106,7 +125,16 @@ func (s *FcmService) SendToAll(ctx context.Context, n *model.Notification) {
 	}
 
 	for _, token := range tokens {
-		go s.sendToDevice(ctx, token, n)
+		token := token
+		go func() {
+			select {
+			case s.sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			defer func() { <-s.sem }()
+			s.sendToDevice(ctx, token, n)
+		}()
 	}
 }
 

@@ -7,11 +7,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
 
 	"go.uber.org/zap"
 
 	"github.com/dingit-me/server/internal/pkg/logger"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -31,10 +32,93 @@ func HashAPIKey(rawKey string) string {
 
 type APIKeyService struct {
 	pool *pgxpool.Pool
+
+	// lastUsedBatcher coalesces per-request last_used_at updates into a
+	// single timed UPDATE. Previously every auth request spawned its
+	// own goroutine to UPDATE one row, which at 100 rps was 100
+	// goroutines + 100 DB round-trips per second just to maintain a
+	// "last seen" column. The batcher dedupes by key id and flushes
+	// every flushInterval; a map of at most N distinct keys gets
+	// written in a single transaction with the latest timestamp per key.
+	lastUsedMu      sync.Mutex
+	lastUsedBuf     map[string]time.Time
+	lastUsedStop    chan struct{}
+	lastUsedStopped chan struct{}
 }
 
+const lastUsedFlushInterval = 5 * time.Second
+
 func NewAPIKeyService(pool *pgxpool.Pool) *APIKeyService {
-	return &APIKeyService{pool: pool}
+	svc := &APIKeyService{
+		pool:            pool,
+		lastUsedBuf:     make(map[string]time.Time),
+		lastUsedStop:    make(chan struct{}),
+		lastUsedStopped: make(chan struct{}),
+	}
+	go svc.lastUsedFlusher()
+	return svc
+}
+
+// Stop shuts down the background flusher and drains any pending
+// last_used_at updates. Safe to call multiple times.
+func (s *APIKeyService) Stop() {
+	select {
+	case <-s.lastUsedStop:
+		return // already stopped
+	default:
+	}
+	close(s.lastUsedStop)
+	<-s.lastUsedStopped
+}
+
+func (s *APIKeyService) lastUsedFlusher() {
+	defer close(s.lastUsedStopped)
+	ticker := time.NewTicker(lastUsedFlushInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.lastUsedStop:
+			s.flushLastUsed()
+			return
+		case <-ticker.C:
+			s.flushLastUsed()
+		}
+	}
+}
+
+func (s *APIKeyService) flushLastUsed() {
+	s.lastUsedMu.Lock()
+	if len(s.lastUsedBuf) == 0 {
+		s.lastUsedMu.Unlock()
+		return
+	}
+	batch := s.lastUsedBuf
+	s.lastUsedBuf = make(map[string]time.Time)
+	s.lastUsedMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	for id, ts := range batch {
+		_, err := s.pool.Exec(ctx, `UPDATE api_keys SET last_used_at = $1 WHERE id = $2`, ts, id)
+		if err != nil {
+			logger.Error("Failed to flush last_used_at",
+				zap.String("key_id", id),
+				zap.Error(err),
+			)
+		}
+	}
+}
+
+func (s *APIKeyService) queueLastUsed(id string, ts time.Time) {
+	s.lastUsedMu.Lock()
+	defer s.lastUsedMu.Unlock()
+	// Keep only the latest timestamp per id. No point writing an older
+	// timestamp if a more recent auth hit already arrived.
+	if existing, ok := s.lastUsedBuf[id]; ok && existing.After(ts) {
+		return
+	}
+	s.lastUsedBuf[id] = ts
 }
 
 func (s *APIKeyService) Create(ctx context.Context, name, rawKey string) (*model.APIKey, error) {
@@ -78,14 +162,9 @@ func (s *APIKeyService) ValidateKey(ctx context.Context, rawKey string) (*model.
 		return nil, fmt.Errorf("validate api key: %w", err)
 	}
 
-	go func() {
-		bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_, err := s.pool.Exec(bgCtx, `UPDATE api_keys SET last_used_at = $1 WHERE id = $2`, time.Now().UTC(), ak.ID)
-		if err != nil {
-			logger.Error("Failed to update last_used_at", zap.Error(err))
-		}
-	}()
+	// Coalesce the last_used_at update instead of firing a goroutine
+	// per request. See lastUsedFlusher for the write path.
+	s.queueLastUsed(ak.ID, time.Now().UTC())
 
 	return &ak, nil
 }
