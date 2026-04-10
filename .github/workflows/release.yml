@@ -33,6 +33,16 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
 
+      # Derive a short commit SHA and RFC 3339 timestamp for -ldflags
+      # injection. github.sha is the full 40-char hash; cut it to 7 to
+      # match `git rev-parse --short HEAD` used by the Makefile, so the
+      # build_info field reads identically no matter which build path
+      # produced the binary.
+      - id: build-meta
+        run: |
+          echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
       - uses: docker/build-push-action@v6
         with:
           context: ./apps/server
@@ -40,5 +50,12 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # WYX-411: inject build metadata into the Go binary at link
+          # time. Must stay in sync with Makefile's BUILD_LDFLAGS_SERVER
+          # and apps/server/Dockerfile's ARG list.
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT_SHA=${{ steps.build-meta.outputs.short_sha }}
+            BUILT_AT=${{ steps.build-meta.outputs.built_at }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

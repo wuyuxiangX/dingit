@@ -1,5 +1,33 @@
 .PHONY: setup codegen dev-server dev-app test format analyze check-theme-i18n clean build-cli build-server docs-install docs-dev docs-build docs-start docs-clean
 
+# ── Build metadata (WYX-411) ───────────────────────────────────────────────
+# Injected into Go binaries at link time via -ldflags -X so both
+# `dingit-server --version` and `dingit --version` print the real release
+# tag instead of the "dev" sentinel. These values also flow into
+# /api/health/debug's build_info field via the buildinfo package.
+#
+# Three call sites must stay in sync (change one, change all):
+#   1. Makefile                            (this file)
+#   2. apps/server/Dockerfile              (ARG + -ldflags)
+#   3. .github/workflows/release.yml       (build-args for buildx)
+#
+# BUILD_VERSION falls back to "dev" when the workspace is outside git
+# (e.g. a tarball extract), so the LDFLAGS always produce a valid symbol
+# even in untarred sources.
+BUILD_VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+BUILD_COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
+BUILD_DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+
+BUILD_LDFLAGS_SERVER := -ldflags "-s -w \
+	-X github.com/dingit-me/server/internal/buildinfo.Version=$(BUILD_VERSION) \
+	-X github.com/dingit-me/server/internal/buildinfo.CommitSHA=$(BUILD_COMMIT) \
+	-X github.com/dingit-me/server/internal/buildinfo.BuiltAt=$(BUILD_DATE)"
+
+BUILD_LDFLAGS_CLI := -ldflags "-s -w \
+	-X github.com/dingit-me/cli/internal/buildinfo.Version=$(BUILD_VERSION) \
+	-X github.com/dingit-me/cli/internal/buildinfo.CommitSHA=$(BUILD_COMMIT) \
+	-X github.com/dingit-me/cli/internal/buildinfo.BuiltAt=$(BUILD_DATE)"
+
 setup:
 	dart pub global activate melos
 	melos bootstrap
@@ -39,10 +67,10 @@ check-theme-i18n:
 	bash apps/app/scripts/check-theme-i18n.sh
 
 build-server:
-	cd apps/server && go build -o dingit-server .
+	cd apps/server && go build $(BUILD_LDFLAGS_SERVER) -o dingit-server .
 
 build-cli:
-	cd apps/cli && go build -o dingit .
+	cd apps/cli && go build $(BUILD_LDFLAGS_CLI) -o dingit .
 
 clean:
 	melos clean

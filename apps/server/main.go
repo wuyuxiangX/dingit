@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 
+	"github.com/dingit-me/server/internal/buildinfo"
 	"github.com/dingit-me/server/internal/config"
 	"github.com/dingit-me/server/internal/db"
 	"github.com/dingit-me/server/internal/handler"
@@ -30,7 +31,13 @@ func main() {
 	generateKey := flag.Bool("generate-key", false, "Generate a new API key and exit")
 	migrateOnly := flag.Bool("migrate-only", false, "Apply pending DB migrations and exit (no HTTP server)")
 	migrateStatus := flag.Bool("migrate-status", false, "Print DB migration status and exit (no HTTP server)")
+	versionFlag := flag.Bool("version", false, "Print build version and exit")
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Printf("dingit-server %s\n", buildinfo.String())
+		os.Exit(0)
+	}
 
 	if *generateKey {
 		fmt.Println(service.GenerateAPIKey())

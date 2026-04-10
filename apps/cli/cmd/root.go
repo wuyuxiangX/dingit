@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dingit-me/cli/internal/buildinfo"
 	"github.com/dingit-me/cli/internal/client"
 	"github.com/dingit-me/cli/internal/config"
 	"github.com/spf13/cobra"
@@ -14,8 +15,9 @@ var apiKeyFlag string
 var jsonOutput bool
 
 var rootCmd = &cobra.Command{
-	Use:   "dingit",
-	Short: "Dingit CLI - Send and manage notifications",
+	Use:     "dingit",
+	Short:   "Dingit CLI - Send and manage notifications",
+	Version: buildinfo.String(),
 }
 
 func Execute() {
@@ -29,6 +31,12 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "", "Server URL override")
 	rootCmd.PersistentFlags().StringVar(&apiKeyFlag, "api-key", "", "API key override")
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
+
+	// Match the server's --version line formatting so both binaries print
+	// an identical, grep-friendly "<name> <version> (<sha>, built <ts>)"
+	// shape, regardless of whether you run `dingit-server --version` or
+	// `dingit --version`.
+	rootCmd.SetVersionTemplate("dingit {{.Version}}\n")
 }
 
 func newClient() *client.Client {

@@ -7,9 +7,24 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Build static binary
+# Build metadata (WYX-411) — passed in via `docker build --build-arg …`.
+# Defaults to "dev" so plain `docker build .` still produces a working
+# binary with a recognisable sentinel. The release workflow overrides
+# all three from the git ref / commit / timestamp.
+ARG VERSION=dev
+ARG COMMIT_SHA=dev
+ARG BUILT_AT=dev
+
+# Build static binary. -ldflags -X injects the buildinfo variables at
+# link time — must stay in sync with the Makefile's BUILD_LDFLAGS_SERVER
+# and the release.yml build-args.
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o dingit-server .
+RUN CGO_ENABLED=0 GOOS=linux go build \
+        -ldflags="-s -w \
+            -X github.com/dingit-me/server/internal/buildinfo.Version=${VERSION} \
+            -X github.com/dingit-me/server/internal/buildinfo.CommitSHA=${COMMIT_SHA} \
+            -X github.com/dingit-me/server/internal/buildinfo.BuiltAt=${BUILT_AT}" \
+        -o dingit-server .
 
 # === Runtime stage ===
 FROM alpine:3.21
