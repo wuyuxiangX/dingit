@@ -7,6 +7,11 @@ tmp/
 Dockerfile
 Makefile
 .air.toml
-configs/AuthKey_*.p8
-configs/firebase-service-account.json
 configs/local.yaml
+# Secrets live in ../secrets at the repo root and are mounted as a
+# volume at runtime, never baked into the image. Listed here as a belt:
+# if anyone ever places a secret file under configs/, the image build
+# still won't pick it up.
+configs/*.p8
+configs/*.json
+

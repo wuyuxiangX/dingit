@@ -84,6 +84,13 @@ func Load() (*Config, error) {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, fmt.Errorf("read config: %w", err)
 		}
+		// Not an error — env-var-only deploys are fine — but log so
+		// operators notice when they expected a config file to be
+		// picked up. Uses stderr because the structured logger is
+		// not initialized yet at this point in startup.
+		fmt.Fprintf(os.Stderr, "config: no %s.yaml found in ./configs — using defaults + env overrides\n", env)
+	} else {
+		fmt.Fprintf(os.Stderr, "config: loaded %s\n", v.ConfigFileUsed())
 	}
 
 	// Environment variable overrides
@@ -108,5 +115,38 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
 
+	// Refuse to start in production with a known weak shared default.
+	// The old docker-compose.yml offered `dingit_dev_password` as a
+	// fallback; a booted prod server with that string in its DSN is
+	// almost certainly a misconfigured deploy.
+	if cfg.IsProduction() {
+		for _, weak := range weakPasswords {
+			if strings.Contains(cfg.Database.URL, ":"+weak+"@") {
+				return nil, fmt.Errorf("refusing to start in production with known weak DB password %q — set POSTGRES_PASSWORD", weak)
+			}
+		}
+		// CORS wide-open check. Not a hard fail — there are legitimate
+		// reasons to allow all origins (public API, no cookies) — but
+		// it should be an explicit choice, not a default. Print a
+		// prominent warning so operators notice during rollout.
+		for _, o := range cfg.CORS.AllowedOrigins {
+			if o == "*" {
+				fmt.Fprintln(os.Stderr, "WARNING: CORS allowed_origins=* in production — confirm this is intentional")
+				break
+			}
+		}
+	}
+
 	return &cfg, nil
+}
+
+// weakPasswords is the deny-list of shared defaults that must never be
+// used in production. Keep this short — it's not a password strength
+// checker, just a guard against copy/paste mistakes.
+var weakPasswords = []string{
+	"dingit_dev_password",
+	"postgres",
+	"password",
+	"change_me_in_production",
+	"changeme",
 }

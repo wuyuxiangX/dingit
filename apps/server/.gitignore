@@ -1,3 +1,5 @@
 bin/
-configs/firebase-service-account.json
-configs/AuthKey_*.p8
+# Secrets must live under /secrets (see root .gitignore). Anything in
+# configs/ is meant to be committed — runtime credentials in configs/
+# are a foot-gun because one accidental `git add configs/` bypasses
+# gitignore rules on individual files.

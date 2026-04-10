@@ -25,7 +25,26 @@ func NewHealthHandler(store *service.Store, hub *ws.Hub) *HealthHandler {
 	}
 }
 
+// Health is the public, unauthenticated health probe. It deliberately
+// returns only `status` so unauthenticated callers can't enumerate
+// operational signals like connection counts or pending queue depth.
+// The richer view now lives on HealthDebug, which is authenticated.
 func (h *HealthHandler) Health(c *gin.Context) {
+	pending := model.StatusPending
+	_, err := h.store.Count(c.Request.Context(), &pending, nil)
+
+	status := "ok"
+	if err != nil {
+		status = "degraded"
+	}
+
+	response.Success(c, gin.H{"status": status})
+}
+
+// HealthDebug returns the verbose operational view. Must be mounted
+// inside the authenticated route group so only API-key-holding callers
+// can read it.
+func (h *HealthHandler) HealthDebug(c *gin.Context) {
 	pending := model.StatusPending
 	count, err := h.store.Count(c.Request.Context(), &pending, nil)
 
