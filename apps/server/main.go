@@ -114,14 +114,38 @@ func main() {
 		}
 
 		// Write the full key to a 0600 file so operators can recover it
-		// even if they missed the stderr banner. Preferred location is
-		// /secrets (the docker volume mount); fall back to the CWD so
-		// the file always lands somewhere.
-		keyFilePath := "/secrets/.initial-api-key"
-		if _, err := os.Stat("/secrets"); err != nil {
-			keyFilePath = ".initial-api-key"
+		// even if they missed the stderr banner. Try candidate paths in
+		// priority order until one accepts the write:
+		//   1. /secrets/.initial-api-key — preferred because operators
+		//      look in /secrets for anything credential-shaped.
+		//   2. .initial-api-key (CWD) — fallback for bare-metal deploys
+		//      where there is no /secrets mount.
+		//   3. /tmp/.initial-api-key — last resort, survives until the
+		//      container restarts but is always writable inside typical
+		//      containers where /app and /secrets are non-writable.
+		//
+		// /secrets is typically mounted read-only in production (which
+		// is the right call — credentials are injected by the
+		// orchestrator, not writable by the app), so we probe
+		// writability by actually attempting the write, not just
+		// stat-ing the directory. Same story for CWD: non-root users
+		// in a well-hardened image usually can't write to WORKDIR.
+		keyCandidates := []string{
+			"/secrets/.initial-api-key",
+			".initial-api-key",
+			"/tmp/.initial-api-key",
 		}
-		writeErr := os.WriteFile(keyFilePath, []byte(rawKey+"\n"), 0o600)
+		var keyFilePath string
+		var writeErr error
+		for _, p := range keyCandidates {
+			if err := os.WriteFile(p, []byte(rawKey+"\n"), 0o600); err != nil {
+				writeErr = err
+				continue
+			}
+			keyFilePath = p
+			writeErr = nil
+			break
+		}
 
 		// Print the full key to stderr with a loud banner. Stderr bypasses
 		// the structured logger so it always shows even under JSON mode,
