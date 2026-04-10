@@ -1,4 +1,4 @@
-package com.notifyhub.notify_app
+package me.dingit.app
 
 import io.flutter.embedding.android.FlutterActivity
 

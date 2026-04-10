@@ -1,0 +1,24 @@
+# Android release signing configuration — COPY to `key.properties`
+# and fill in real values. The live file is gitignored; never commit
+# the filled-in version.
+#
+# Referenced by apps/app/android/app/build.gradle.kts at build time.
+# When absent, `flutter build apk --release` falls back to the debug
+# keystore and prints a warning to stderr.
+#
+# Generate a keystore (one time, store it outside the repo):
+#
+#   keytool -genkey -v \
+#       -keystore ~/keys/dingit-upload-keystore.jks \
+#       -keyalg RSA -keysize 2048 -validity 10000 \
+#       -alias upload
+#
+# Then point storeFile below at that absolute path (or a relative path
+# from android/app/). Keep the keystore AND this filled-in properties
+# file in a password manager — losing them means you cannot publish
+# upgrades to the same Play Store listing ever again.
+
+storePassword=CHANGEME
+keyPassword=CHANGEME
+keyAlias=upload
+storeFile=/absolute/path/to/dingit-upload-keystore.jks
