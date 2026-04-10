@@ -1,0 +1,50 @@
+---
+title: Welcome
+description: Dingit — self-hosted interactive notifications for your scripts, servers, and life.
+---
+
+**Dingit** is a self-hosted notification system with three first-class clients
+(Server, Flutter App, Go CLI). Unlike a plain push service, every Dingit
+notification carries **Actions** and an optional **callback hook** — one tap on
+the App bell, and your script hears back.
+
+<Cards>
+  <Card
+    title="5-minute quickstart"
+    href="/en/docs/getting-started/first-notification"
+    description="curl → App bell → callback, end to end."
+  />
+  <Card
+    title="Core concepts"
+    href="/en/docs/getting-started/concepts"
+    description="Source, status, actions, callbacks — the model in one page."
+  />
+  <Card
+    title="Self-host the server"
+    href="/en/docs/server/deploy-docker"
+    description="docker-compose, systemd, cloud — pick one and ship."
+  />
+  <Card
+    title="API reference"
+    href="/en/docs/api/reference"
+    description="OpenAPI-driven, interactive Try-it-out."
+  />
+</Cards>
+
+## Why Dingit?
+
+| You have | Dingit gives you |
+|----------|------------------|
+| A long-running script (training, backup, crawl) | A bell that actually tells you when it's done |
+| A CI pipeline that sometimes fails silently | A push with a "Rerun" action that calls back into CI |
+| A home-lab with 10 places that might need attention | One card stack, three devices, synced state |
+| Strong feelings about data ownership | Your PostgreSQL, your server, zero third-party lock-in |
+
+## The three clients
+
+- **Server** (Go) — REST + WebSocket, PostgreSQL backed, Prometheus metrics, version-migrated schema.
+- **App** (Flutter) — iOS, Android, Web, macOS. Card-stack UI, editorial type, warm-paper aesthetic.
+- **CLI** (Go) — single binary, `curl | sh` installable, script-friendly subcommands.
+
+One notification, three surfaces, one coherent model. That's the whole
+product.

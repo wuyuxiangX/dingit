@@ -50,3 +50,14 @@ docker-compose.override.yml
 # Firebase credentials
 apps/app/ios/Runner/GoogleService-Info.plist
 apps/app/android/app/google-services.json
+
+# Node / Next.js / Fumadocs (apps/docs, apps/www)
+node_modules/
+.pnpm-store/
+.next/
+.source/
+out/
+*.tsbuildinfo
+next-env.d.ts
+.env*.local
+.vercel

@@ -1,0 +1,74 @@
+---
+title: Core concepts
+description: The five things you need to know about the Dingit model.
+---
+
+If you read nothing else, read this page. Five concepts, one page.
+
+## 1 · Notification
+
+A Dingit notification is **not** just a text push. It's a record with:
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `title` | ✓ | Short, card headline |
+| `body` | | Long-form text (Markdown support coming in v1.3) |
+| `source` | ✓ | Origin tag — `"ci"`, `"cron"`, `"me"`, anything |
+| `actions` | | Array of `{id, label}` — tappable on the card |
+| `callback_url` | | Server POSTs here when an action fires |
+| `deliver_at` | | Schedule a future send (v1.3) |
+
+## 2 · Status
+
+Every notification moves through one of four terminal states:
+
+```
+      ┌─ actioned   (user tapped an action)
+      │
+pending ─┼─ dismissed  (user swiped it away)
+      │
+      └─ expired    (nobody touched it in time)
+```
+
+Server-side races are resolved with `WHERE status = 'pending'` guards — two
+clients can't "both tap Rerun."
+
+## 3 · Action
+
+Actions turn notifications from read-only alerts into **two-way handles**.
+An action has an `id` (machine-readable) and a `label` (what the user sees).
+Tapping one:
+
+1. Marks the notification `actioned` with that `action_id`
+2. Broadcasts the state change over WebSocket to every connected client
+3. Fires the `callback_url` (if set) with a signed payload
+
+## 4 · Callback
+
+The callback is Dingit's one **outbound** request. Your webhook receives:
+
+```json
+{
+  "notification_id": "nt_abc123",
+  "action_id": "rerun",
+  "fired_at": "2026-04-10T12:34:56Z",
+  "signature": "sha256=..."
+}
+```
+
+Verify the signature with your API key's callback secret. See
+[Webhooks](/en/docs/api/webhooks) for the exact HMAC recipe.
+
+## 5 · Source & API key
+
+Every notification belongs to an **API key**, and every API key can filter
+by `source`. This is the two-layer scoping that lets you share one server
+across many projects without leaking pending lists into each other's Apps.
+
+---
+
+<Callout type="info">
+**That's the whole model.** Five concepts, one database table, three clients.
+Everything else — read/unread, DND, templates, grouping — builds on top of
+this core.
+</Callout>

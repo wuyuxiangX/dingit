@@ -1,0 +1,54 @@
+---
+title: Installation
+description: Install the Dingit Server, App, and CLI — pick what you need.
+---
+
+Dingit has three independent pieces. You don't have to install all three — a
+CLI user who points at someone else's self-hosted server is perfectly valid.
+
+## Server
+
+The server is a single Go binary backed by PostgreSQL.
+
+```bash title="docker-compose (recommended)"
+curl -O https://raw.githubusercontent.com/wuyuxiangX/dingit/main/docker-compose.yml
+docker compose up -d
+```
+
+See [Self-host the server](/en/docs/server/deploy-docker) for systemd, Fly.io,
+Railway, and bare-metal walkthroughs.
+
+## CLI
+
+<Callout type="info">
+`install.sh` is coming in v1.2. Until then, build from source or grab a
+release binary.
+</Callout>
+
+```bash title="Build from source"
+git clone https://github.com/wuyuxiangX/dingit
+cd dingit/apps/cli && go build -o dingit .
+./dingit version
+```
+
+## App
+
+- **iOS** — TestFlight link (coming soon) or build locally from
+  `apps/app/` with Flutter 3.27+.
+- **Android** — side-load APK from the Releases page, or build locally.
+- **macOS / Web** — `cd apps/app && flutter run -d macos` (or `-d chrome`).
+
+## What's next?
+
+<Cards>
+  <Card
+    title="Send your first notification"
+    href="/en/docs/getting-started/first-notification"
+    description="End-to-end in 5 minutes."
+  />
+  <Card
+    title="Understand the model"
+    href="/en/docs/getting-started/concepts"
+    description="Source, status, actions, callback hook."
+  />
+</Cards>

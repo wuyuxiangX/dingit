@@ -1,0 +1,87 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/*
+ * Dingit brand theme — mirrors apps/app/lib/app/theme/tokens/app_tokens.dart.
+ * Philosophy: editorial feel, warm paper neutrals (NOT cold white), hand-tuned
+ * Apple system blue as the single accent. Every token here maps byte-for-byte
+ * to the Flutter token of the same name so all three surfaces (App, Docs, Www)
+ * stay in lockstep.
+ *
+ * To update a color:
+ *   1. Change it in apps/app/lib/app/theme/tokens/app_tokens.dart first
+ *   2. Mirror the same hex here
+ *   3. Never invent new colors — add a token in Dart and then mirror.
+ */
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+}
+
+@theme {
+  /* Light mode — "paper" scaffold, warm container, Apple system blue CTA. */
+  --color-fd-background: #fafafa;          /* paper */
+  --color-fd-foreground: #111111;          /* ink */
+  --color-fd-muted: #f2f0ed;               /* paperWarm */
+  --color-fd-muted-foreground: #8a8a8e;    /* inkFaint */
+  --color-fd-popover: #ffffff;             /* surface */
+  --color-fd-popover-foreground: #111111;  /* ink */
+  --color-fd-card: #ffffff;                /* surface */
+  --color-fd-card-foreground: #111111;     /* ink */
+  --color-fd-border: #e8e6e3;              /* divider */
+  --color-fd-primary: #0a84ff;             /* accent — Apple system blue */
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-secondary: #f2f0ed;           /* paperWarm */
+  --color-fd-secondary-foreground: #111111;
+  --color-fd-accent: #f2f0ed;              /* paperWarm — hover/selected bg */
+  --color-fd-accent-foreground: #111111;
+  --color-fd-ring: #0a84ff;
+}
+
+.dark {
+  /* Dark mode — brighter accent to keep WCAG AA against paperDark. */
+  --color-fd-background: #0b0b0b;               /* paperDark */
+  --color-fd-foreground: #ffffff;               /* inkDark */
+  --color-fd-muted: #151517;                    /* paperWarmDark */
+  --color-fd-muted-foreground: #b0b0b5;         /* inkFaintDark */
+  --color-fd-popover: #1c1c1e;                  /* surfaceDark */
+  --color-fd-popover-foreground: #ffffff;
+  --color-fd-card: #1c1c1e;                     /* surfaceDark */
+  --color-fd-card-foreground: #ffffff;
+  --color-fd-border: rgba(255, 255, 255, 0.12); /* cardBorderDark-ish */
+  --color-fd-primary: #2e9bff;                  /* accentDark */
+  --color-fd-primary-foreground: #0b0b0b;
+  --color-fd-secondary: #151517;                /* paperWarmDark */
+  --color-fd-secondary-foreground: #ffffff;
+  --color-fd-accent: #151517;
+  --color-fd-accent-foreground: #ffffff;
+  --color-fd-ring: #2e9bff;
+}
+
+/*
+ * Editorial typography — headings use the display serif, body stays sans.
+ * This is the one place Dingit diverges from the Fumadocs default and it's
+ * the single biggest visual cue that "this is a product docs site with a
+ * point of view" rather than "yet another tech docs site".
+ */
+.prose h1,
+.prose h2,
+.prose h3,
+main h1,
+main h2,
+main h3 {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}

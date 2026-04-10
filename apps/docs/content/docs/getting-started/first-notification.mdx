@@ -1,0 +1,76 @@
+---
+title: First notification in 5 minutes
+description: From zero to a buzzing bell — curl, App, callback.
+---
+
+This page walks you from a cold shell to a live notification delivered to
+your App, and a callback hitting a local webhook. Budget: 5 minutes.
+
+## 0 · Prerequisites
+
+- Dingit server running at `http://localhost:8080` (see
+  [Self-host the server](/en/docs/server/deploy-docker))
+- An API key — grab it from `secrets/initial-api-key.txt` after the first
+  server start, or mint one via the CLI
+- Dingit App installed and configured to point at the same server
+
+## 1 · Fire the notification
+
+```bash
+curl -X POST http://localhost:8080/api/notifications \
+  -H "Authorization: Bearer $DINGIT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Build finished",
+    "body": "staging deploy · 2m 14s",
+    "source": "ci",
+    "actions": [
+      { "id": "open", "label": "Open in Grafana" },
+      { "id": "rerun", "label": "Rerun" }
+    ]
+  }'
+```
+
+Your App should **buzz within half a second** — the server pushes over
+WebSocket, not polling.
+
+## 2 · Tap an action
+
+Tap **Rerun** on the card. The App PATCHes the notification status to
+`actioned` with `action_id=rerun`, and the server fires the optional
+callback.
+
+## 3 · Wire a callback
+
+Add `callback_url` to the request so the server calls back when the user
+taps an action:
+
+```bash title="With callback"
+curl -X POST http://localhost:8080/api/notifications \
+  -H "Authorization: Bearer $DINGIT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Build finished",
+    "body": "staging deploy · 2m 14s",
+    "source": "ci",
+    "actions": [{ "id": "rerun", "label": "Rerun" }],
+    "callback_url": "https://ci.example.com/rerun"
+  }'
+```
+
+When the user taps **Rerun**, the server POSTs to `callback_url` with
+`{ notification_id, action_id, signature }`. Your CI reruns the job.
+
+That's the whole loop: **script → server → App → human → callback → script**.
+
+## What did I just do?
+
+You touched four of the five concepts that make up the Dingit model:
+
+- **source** — `"ci"` marks the origin so you can filter in the App
+- **actions** — clickable buttons on the card
+- **status** — the server tracked `pending → actioned`
+- **callback** — the webhook that closes the loop
+
+The fifth concept is **scheduling** (send later) — covered in
+[Core concepts](/en/docs/getting-started/concepts).
