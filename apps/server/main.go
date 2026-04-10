@@ -253,9 +253,14 @@ func main() {
 	expirySvc := service.NewExpiryService(store, hub, 60*time.Second)
 	go expirySvc.Start(ctx)
 
-	// Handlers
+	// Handlers. HealthHandler gets references to every piece of wiring
+	// that /api/health/debug needs to report on (DB pool for ping,
+	// push providers for last-success/error, callback service for
+	// queue depth). Push providers may still be nil here if their env
+	// vars weren't set — the handler renders that as "enabled": false
+	// instead of erroring out.
 	notificationHandler := handler.NewNotificationHandler(store, hub, callbackSvc, pushRouter)
-	healthHandler := handler.NewHealthHandler(store, hub)
+	healthHandler := handler.NewHealthHandler(store, hub, pool, apnsSvc, fcmSvc, callbackSvc)
 	wsHandler := handler.NewWsHandler(store, hub, cfg.CORS)
 	deviceHandler := handler.NewDeviceHandler(deviceSvc)
 
