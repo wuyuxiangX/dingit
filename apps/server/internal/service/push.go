@@ -13,9 +13,14 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/oauth2/google"
 
+	"github.com/dingit-me/server/internal/metrics"
 	"github.com/dingit-me/server/internal/model"
 	"github.com/dingit-me/server/internal/pkg/logger"
 )
+
+// fcmProvider is the label value used for every dingit_push_delivery_total
+// increment from this file. Mirrors apnsProvider in apns.go.
+const fcmProvider = "fcm"
 
 // PushRouter dispatches push notifications to the appropriate service based on platform.
 // iOS → APNs (direct, works in China)
@@ -142,6 +147,7 @@ func (s *FcmService) sendToDevice(ctx context.Context, deviceToken string, n *mo
 	accessToken, err := s.getAccessToken(ctx)
 	if err != nil {
 		logger.Error("Failed to get FCM access token", zap.Error(err))
+		metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "error").Inc()
 		return
 	}
 
@@ -166,6 +172,7 @@ func (s *FcmService) sendToDevice(ctx context.Context, deviceToken string, n *mo
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		logger.Error("Failed to create FCM request", zap.Error(err))
+		metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "error").Inc()
 		return
 	}
 
@@ -175,6 +182,7 @@ func (s *FcmService) sendToDevice(ctx context.Context, deviceToken string, n *mo
 	resp, err := s.client.Do(req)
 	if err != nil {
 		logger.Error("FCM request failed", zap.Error(err))
+		metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "error").Inc()
 		return
 	}
 	defer resp.Body.Close()
@@ -182,11 +190,16 @@ func (s *FcmService) sendToDevice(ctx context.Context, deviceToken string, n *mo
 	if resp.StatusCode == 404 || resp.StatusCode == 410 {
 		logger.Info("Removing invalid FCM device token")
 		_ = s.deviceSvc.RemoveByToken(ctx, deviceToken)
+		metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "invalid_token").Inc()
 		return
 	}
 
 	if resp.StatusCode != 200 {
 		respBody, _ := io.ReadAll(resp.Body)
 		logger.Error("FCM error", zap.Int("status", resp.StatusCode), zap.String("body", string(respBody)))
+		metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "error").Inc()
+		return
 	}
+
+	metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "success").Inc()
 }

@@ -11,11 +11,13 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 
 	"github.com/dingit-me/server/internal/config"
 	"github.com/dingit-me/server/internal/db"
 	"github.com/dingit-me/server/internal/handler"
+	"github.com/dingit-me/server/internal/metrics"
 	"github.com/dingit-me/server/internal/middleware"
 	"github.com/dingit-me/server/internal/model"
 	"github.com/dingit-me/server/internal/pkg/logger"
@@ -230,6 +232,16 @@ func main() {
 	})
 	defer hub.Close()
 
+	// Register scrape-time Prometheus collectors now that hub and store
+	// exist. The adapter converts the ("pending" / "actioned" / ...)
+	// string labels the metrics package understands into the typed
+	// NotificationStatus argument the store.Count method wants. Keeps
+	// the metrics package fully decoupled from internal/model.
+	metrics.RegisterDynamic(hub, func(ctx context.Context, status string) (int, error) {
+		ns := model.NotificationStatus(status)
+		return store.Count(ctx, &ns, nil)
+	})
+
 	// Expiry service
 	expirySvc := service.NewExpiryService(store, hub, 60*time.Second)
 	go expirySvc.Start(ctx)
@@ -248,6 +260,12 @@ func main() {
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORS(cfg.CORS))
 	r.Use(middleware.RequestLog())
+
+	// Prometheus HTTP metrics. Placed BEFORE rate limit and auth so
+	// that 401/429/500 responses are still counted — those are exactly
+	// the events operators need visibility into. The middleware
+	// self-excludes /metrics to prevent a scrape-counter feedback loop.
+	r.Use(middleware.Metrics())
 
 	// Per-IP rate limit BEFORE auth. This caps the damage from anyone
 	// brute-forcing API keys — without it, every invalid key cost us a
@@ -274,6 +292,11 @@ func main() {
 
 	// Routes
 	r.GET("/health", healthHandler.Health)
+	// /metrics is deliberately NOT in APIKeyAuth's skipPaths map above,
+	// so it's protected by the same API key as the rest of the API.
+	// Exposing notification counts / push success rates unauthenticated
+	// would leak business-scale and traffic patterns to any scraper.
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	r.GET("/ws", wsHandler.Handle)
 
 	api := r.Group("/api")

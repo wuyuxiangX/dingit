@@ -14,9 +14,26 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/dingit-me/server/internal/metrics"
 	"github.com/dingit-me/server/internal/model"
 	"github.com/dingit-me/server/internal/pkg/logger"
 )
+
+// statusClassOf buckets an HTTP status code into the coarse label used by
+// dingit_callback_delivery_total{status_class=...}. Keeps label cardinality
+// at O(1) regardless of how many distinct statuses upstream servers return.
+func statusClassOf(code int) string {
+	switch {
+	case code >= 200 && code < 300:
+		return "2xx"
+	case code >= 400 && code < 500:
+		return "4xx"
+	case code >= 500 && code < 600:
+		return "5xx"
+	default:
+		return "other"
+	}
+}
 
 // ErrInvalidCallbackURL is returned by ValidateCallbackURL when the URL
 // fails any of the SSRF guard rails.
@@ -140,6 +157,7 @@ func (s *CallbackService) Deliver(notification *model.Notification, response *mo
 			zap.String("url", *notification.CallbackURL),
 			zap.Error(err),
 		)
+		metrics.CallbackDeliveryTotal.WithLabelValues("rejected", "none").Inc()
 		return
 	}
 
@@ -153,6 +171,7 @@ func (s *CallbackService) Deliver(notification *model.Notification, response *mo
 		logger.Warn("Callback dropped: delivery queue saturated",
 			zap.String("url", *notification.CallbackURL),
 		)
+		metrics.CallbackDeliveryTotal.WithLabelValues("dropped", "none").Inc()
 		return
 	}
 	go func() {
@@ -173,8 +192,15 @@ func (s *CallbackService) deliverWithRetry(url string, notification *model.Notif
 	body, err := json.Marshal(payload)
 	if err != nil {
 		logger.Error("Callback marshal error", zap.Error(err))
+		metrics.CallbackDeliveryTotal.WithLabelValues("failure", "none").Inc()
 		return
 	}
+
+	// lastStatusClass tracks the outcome of the most recent attempt so
+	// that when all retries are exhausted we can report a meaningful
+	// status_class label rather than "none". Starts as "network_error"
+	// to cover the case where every attempt failed at the TCP layer.
+	lastStatusClass := "network_error"
 
 	const maxRetries = 3
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -183,10 +209,13 @@ func (s *CallbackService) deliverWithRetry(url string, notification *model.Notif
 			resp.Body.Close()
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 				logger.Info("Callback delivered", zap.String("url", url), zap.Int("status", resp.StatusCode))
+				metrics.CallbackDeliveryTotal.WithLabelValues("success", "2xx").Inc()
 				return
 			}
+			lastStatusClass = statusClassOf(resp.StatusCode)
 			logger.Warn("Callback failed", zap.String("url", url), zap.Int("attempt", attempt+1), zap.Int("status", resp.StatusCode))
 		} else {
+			lastStatusClass = "network_error"
 			logger.Warn("Callback error", zap.String("url", url), zap.Int("attempt", attempt+1), zap.Error(err))
 		}
 
@@ -197,4 +226,5 @@ func (s *CallbackService) deliverWithRetry(url string, notification *model.Notif
 	}
 
 	logger.Error("Callback retries exhausted", zap.String("url", url))
+	metrics.CallbackDeliveryTotal.WithLabelValues("failure", lastStatusClass).Inc()
 }

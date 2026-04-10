@@ -110,3 +110,72 @@ After the upgrade, confirm with:
 ```
 
 You should see `001_init.sql` reported as Applied.
+
+## Observability: Prometheus metrics
+
+Dingit exposes operator metrics in the Prometheus text format at
+**`GET /metrics`**. The endpoint is protected by the same API key as the
+rest of the API — **never** expose it unauthenticated, because several of
+the metrics (notification counts, push success rates) leak business
+scale.
+
+### Exposed metrics
+
+| Name | Type | Labels | Meaning |
+|---|---|---|---|
+| `dingit_http_requests_total` | counter | `method`, `route`, `status` | Total HTTP requests by parameterized route and status code. |
+| `dingit_http_request_duration_seconds` | histogram | `route` | Request latency distribution per route. Use `histogram_quantile()` for P95/P99. |
+| `dingit_ws_connected_clients` | gauge | — | Current number of active WebSocket connections. |
+| `dingit_push_delivery_total` | counter | `provider`, `result` | Push sends bucketed by provider (`apns`/`fcm`) and outcome (`success`/`invalid_token`/`error`). |
+| `dingit_callback_delivery_total` | counter | `result`, `status_class` | Terminal webhook callback outcome. Result ∈ `{success, failure, rejected, dropped}`. |
+| `dingit_notifications_by_status` | gauge | `status` | Current notification count per status bucket. |
+
+Cardinality is bounded: the `route` label uses Gin's parameterized path
+(e.g. `/api/notifications/:id`), **not** the raw URL, so a stream of
+unique IDs won't explode your time-series database.
+
+### Prometheus scrape config
+
+Add a job like this to `prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: dingit
+    metrics_path: /metrics
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - dingit.example.com:8080
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/dingit-token
+```
+
+Where `/etc/prometheus/dingit-token` contains a single line with your
+Dingit API key (`chmod 600`, owned by the Prometheus user).
+
+### Grafana dashboard
+
+An importable, datasource-agnostic dashboard lives at
+[`deploy/grafana/dingit-dashboard.json`](../../deploy/grafana/dingit-dashboard.json).
+To use it:
+
+1. Grafana → **Dashboards** → **New** → **Import**
+2. Upload the JSON or paste its contents
+3. When prompted for `DS_PROMETHEUS`, pick the Prometheus data source that
+   scrapes your Dingit server
+4. Click **Import**
+
+The dashboard has six panels mapping one-to-one to the six metrics above,
+with sensible defaults (`rate(...[5m])`, stacked push/callback outcomes,
+P95 latency per route).
+
+### Verifying the endpoint
+
+```sh
+# Without auth — must return 401
+curl -i http://localhost:8080/metrics
+
+# With auth — returns text/plain with dingit_* metric families
+curl -H "Authorization: Bearer $DINGIT_API_KEY" http://localhost:8080/metrics | grep ^dingit_
+```

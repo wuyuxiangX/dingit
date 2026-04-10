@@ -17,9 +17,15 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"
 
+	"github.com/dingit-me/server/internal/metrics"
 	"github.com/dingit-me/server/internal/model"
 	"github.com/dingit-me/server/internal/pkg/logger"
 )
+
+// apnsProvider is the label value used for every dingit_push_delivery_total
+// increment from this file. Keeping it as a constant (vs a string literal
+// at each call site) makes it greppable and impossible to typo.
+const apnsProvider = "apns"
 
 type ApnsConfig struct {
 	KeyFile string // path to .p8 file
@@ -158,6 +164,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 	jwtToken, err := s.getJWT()
 	if err != nil {
 		logger.Error("Failed to get APNs JWT", zap.Error(err))
+		metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "error").Inc()
 		return
 	}
 
@@ -181,6 +188,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		logger.Error("Failed to create APNs request", zap.Error(err))
+		metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "error").Inc()
 		return
 	}
 
@@ -192,12 +200,14 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 	resp, err := s.client.Do(req)
 	if err != nil {
 		logger.Error("APNs request failed", zap.Error(err))
+		metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "error").Inc()
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 200 {
 		logger.Info("APNs push sent", zap.String("device", truncateToken(deviceToken)))
+		metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "success").Inc()
 		return
 	}
 
@@ -207,6 +217,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 		// Token is no longer valid — remove device
 		logger.Info("Removing expired APNs token", zap.String("device", truncateToken(deviceToken)))
 		_ = s.deviceSvc.RemoveByToken(ctx, deviceToken)
+		metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "invalid_token").Inc()
 		return
 	}
 
@@ -214,6 +225,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 		zap.Int("status", resp.StatusCode),
 		zap.String("body", string(respBody)),
 	)
+	metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "error").Inc()
 }
 
 // SendSilentBadgeUpdate sends a background (silent) APNs push to refresh badge
