@@ -61,20 +61,37 @@
 }
 
 /*
- * Editorial typography — headings use the display serif, body stays sans.
- * This is the one place Dingit diverges from the Fumadocs default and it's
- * the single biggest visual cue that "this is a product docs site with a
- * point of view" rather than "yet another tech docs site".
+ * Editorial typography — headings and any `.font-display` span use the
+ * display serif, body stays sans. This is the one place Dingit diverges
+ * from the Fumadocs default and it's the single biggest visual cue that
+ * "this is a product docs site with a point of view" rather than "yet
+ * another tech docs site".
+ *
+ * `font-feature-settings` turns on ligatures, kerning, and contextual
+ * alternates so DM Serif Display renders its intended glyph set. Without
+ * these, the display serif feels one step off from real editorial type.
  */
 .prose h1,
 .prose h2,
 .prose h3,
 main h1,
 main h2,
-main h3 {
+main h3,
+.font-display {
   font-family: var(--font-display), ui-serif, Georgia, serif;
   font-weight: 400;
   letter-spacing: -0.01em;
+  font-feature-settings: "liga", "kern", "calt";
+}
+
+/*
+ * Smoother default body rendering so Plus Jakarta Sans doesn't feel chunky
+ * against the warm paper background, especially in dark mode.
+ */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "kern", "calt";
 }
 
 html {
