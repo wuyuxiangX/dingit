@@ -110,6 +110,21 @@ const callbackConcurrency = 32
 type CallbackService struct {
 	client *http.Client
 	sem    chan struct{}
+	// retryBackoff returns how long to sleep before the next retry
+	// attempt. Injected here (rather than inlined in deliverWithRetry)
+	// so regression tests can supply a zero-duration function and
+	// exercise the retry-exhausted terminal state in sub-second time.
+	// Production callers never touch this — NewCallbackService sets it
+	// to defaultCallbackBackoff which reproduces the exponential schedule.
+	retryBackoff func(attempt int) time.Duration
+}
+
+// defaultCallbackBackoff is the production retry schedule: 3s after the
+// first failure, 9s after the second (27s-worth of back-pressure spread
+// across two sleeps). Kept as a package-level function so tests have a
+// stable reference to compare against if needed.
+func defaultCallbackBackoff(attempt int) time.Duration {
+	return time.Duration(math.Pow(3, float64(attempt+1))) * time.Second
 }
 
 func NewCallbackService() *CallbackService {
@@ -131,8 +146,9 @@ func NewCallbackService() *CallbackService {
 		},
 	}
 	return &CallbackService{
-		client: client,
-		sem:    make(chan struct{}, callbackConcurrency),
+		client:       client,
+		sem:          make(chan struct{}, callbackConcurrency),
+		retryBackoff: defaultCallbackBackoff,
 	}
 }
 
@@ -220,8 +236,7 @@ func (s *CallbackService) deliverWithRetry(url string, notification *model.Notif
 		}
 
 		if attempt < maxRetries-1 {
-			delay := time.Duration(math.Pow(3, float64(attempt+1))) * time.Second
-			time.Sleep(delay)
+			time.Sleep(s.retryBackoff(attempt))
 		}
 	}
 

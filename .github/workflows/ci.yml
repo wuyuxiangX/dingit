@@ -13,6 +13,28 @@ jobs:
     defaults:
       run:
         working-directory: apps/server
+    # Postgres service container for integration tests. Using a
+    # GitHub Actions service here (instead of testcontainers-go) avoids
+    # Docker-in-Docker overhead and the occasional DIND lock-ups we've
+    # seen in CI. The container is fresh per job so tests get a clean
+    # slate; our test helpers then rely on goose migrations + TRUNCATE
+    # for isolation between individual test functions.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: dingit
+          POSTGRES_PASSWORD: testpw
+          POSTGRES_DB: dingit_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+    env:
+      POSTGRES_TEST_URL: postgres://dingit:testpw@localhost:5432/dingit_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
 

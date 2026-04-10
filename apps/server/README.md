@@ -24,6 +24,39 @@ deploy step, or a one-shot admin command. `--migrate-status` is the fastest
 way to check "what version is this environment on?" without touching the
 database manually.
 
+## Running tests
+
+```sh
+# Pure Go tests (no database required) — always safe to run
+go test ./...
+```
+
+Store-layer and other database-backed regression tests skip gracefully
+when there is no test Postgres available. To run the full suite locally,
+point `POSTGRES_TEST_URL` at a disposable database:
+
+```sh
+# Option A — use docker-compose's postgres (fastest if you already have it up)
+export POSTGRES_TEST_URL='postgres://dingit:'"$POSTGRES_PASSWORD"'@localhost:5432/dingit?sslmode=disable'
+go test ./...
+
+# Option B — spin up an isolated container just for tests
+docker run -d --name dingit-pgtest -p 55434:5432 \
+  -e POSTGRES_USER=dingit \
+  -e POSTGRES_PASSWORD=testpw \
+  -e POSTGRES_DB=dingit_test \
+  postgres:17-alpine
+export POSTGRES_TEST_URL='postgres://dingit:testpw@localhost:55434/dingit_test?sslmode=disable'
+go test ./...
+docker rm -f dingit-pgtest
+```
+
+The test helpers apply all goose migrations on first connection and
+TRUNCATE every application table between individual test functions, so
+you can run `go test` repeatedly without residual state. CI uses a
+GitHub Actions Postgres service container with the same `POSTGRES_TEST_URL`
+convention — see `.github/workflows/ci.yml`.
+
 ## Database migrations
 
 Schema changes are managed with [`pressly/goose`](https://github.com/pressly/goose).

@@ -13,14 +13,29 @@ import (
 	"github.com/dingit-me/server/internal/ws"
 )
 
+// notificationStore is the subset of *service.Store that
+// NotificationHandler actually touches. Defined as an unexported
+// interface so unit tests can supply a lightweight in-memory mock
+// without standing up a real PostgreSQL pool. Go structural typing
+// means *service.Store automatically satisfies this interface, so
+// main.go passes one in unchanged.
+type notificationStore interface {
+	Add(ctx context.Context, n *model.Notification) (*model.Notification, error)
+	Get(ctx context.Context, id string) (*model.Notification, error)
+	List(ctx context.Context, status *model.NotificationStatus, priority *model.NotificationPriority, limit, offset int) ([]model.Notification, error)
+	Count(ctx context.Context, status *model.NotificationStatus, priority *model.NotificationPriority) (int, error)
+	UpdateStatus(ctx context.Context, id string, status model.NotificationStatus, actionedValue *string) (*model.Notification, error)
+	Delete(ctx context.Context, id string) (bool, error)
+}
+
 type NotificationHandler struct {
-	store       *service.Store
+	store       notificationStore
 	hub         *ws.Hub
 	callbackSvc *service.CallbackService
 	pushRouter  *service.PushRouter
 }
 
-func NewNotificationHandler(store *service.Store, hub *ws.Hub, callbackSvc *service.CallbackService, pushRouter *service.PushRouter) *NotificationHandler {
+func NewNotificationHandler(store notificationStore, hub *ws.Hub, callbackSvc *service.CallbackService, pushRouter *service.PushRouter) *NotificationHandler {
 	return &NotificationHandler{store: store, hub: hub, callbackSvc: callbackSvc, pushRouter: pushRouter}
 }
 

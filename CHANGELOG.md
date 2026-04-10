@@ -8,6 +8,40 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Server
 
+- **Core regression test coverage for store / callback / handler**
+  ([WYX-409](https://linear.app/wyx/issue/WYX-409)).
+  Adds 10 targeted regression tests covering the paths most at risk of
+  silent breakage:
+
+  - **`internal/service/store_test.go`** — Add happy-path, UpdateStatus
+    race protection (two concurrent callers → exactly one winner),
+    ExpireOverdue sweep boundaries, ListSince cursor semantics.
+  - **`internal/service/callback_test.go`** — SSRF rejection table
+    (rfc1918, loopback, link-local, cloud metadata, http scheme,
+    credentials-in-URL), retry-exhaustion with zero-duration backoff
+    injection, semaphore bound invariant.
+  - **`internal/handler/notification_test.go`** — POST without API key
+    → 401, priority defaults to "normal" when omitted, metadata JSONB
+    round-trips nested structures unchanged.
+
+  Integration tests use a GitHub Actions Postgres service container
+  (not `testcontainers-go` — DIND is slow and occasionally wedges in
+  CI) and skip gracefully when `POSTGRES_TEST_URL` is not set so the
+  default `go test ./...` stays green for contributors without a
+  local database.
+
+  Two small production-code changes enabled the test scenarios:
+    - `CallbackService` now holds its retry backoff function in a field
+      (default preserves the existing 3s/9s exponential schedule),
+      making the retry-exhausted branch testable in sub-second time.
+    - `NotificationHandler` now accepts a package-private
+      `notificationStore` interface instead of `*service.Store`
+      directly, so handler tests can use a minimal in-memory mock.
+      `*service.Store` satisfies the interface structurally, so
+      `main.go` is unchanged.
+
+  See `apps/server/README.md` for `POSTGRES_TEST_URL` local setup.
+
 - **Prometheus `/metrics` endpoint + Grafana dashboard**
   ([WYX-406](https://linear.app/wyx/issue/WYX-406)).
   Adds a protected `GET /metrics` endpoint exposing six core observability
