@@ -254,6 +254,12 @@ abstract class AppLocalizations {
   /// **'Test Connection'**
   String get settingsServerTestConnection;
 
+  /// No description provided for @settingsServerTesting.
+  ///
+  /// In en, this message translates to:
+  /// **'Testing…'**
+  String get settingsServerTesting;
+
   /// No description provided for @settingsServerConnected.
   ///
   /// In en, this message translates to:

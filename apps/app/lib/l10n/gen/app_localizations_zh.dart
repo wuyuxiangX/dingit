@@ -87,6 +87,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsServerTestConnection => '测试连接';
 
   @override
+  String get settingsServerTesting => '测试中…';
+
+  @override
   String get settingsServerConnected => '已连接';
 
   @override

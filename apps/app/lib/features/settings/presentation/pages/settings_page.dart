@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -114,6 +115,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Widget _buildTestTrailing() {
+    // Priority: in-flight > result > nothing.
+    //
+    // We deliberately do NOT fall back to a chevron when idle. The
+    // "Test Connection" row is an action, not a navigation row, so a
+    // chevron was misleading — and during testing the chevron made it
+    // look like nothing was happening on the right side at all (the
+    // spinner only appeared on the left, where the activity icon used
+    // to be). With this layout the right side either announces
+    // progress, the result, or stays empty.
+    if (_isTesting) {
+      return Text(
+        context.l10n.settingsServerTesting,
+        key: const ValueKey('testing'),
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: context.palette.inkFaint,
+        ),
+      );
+    }
     final result = _testResult;
     if (result != null) {
       return _StatusBadge(
@@ -121,12 +142,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         result: result,
       );
     }
-    return Icon(
-      LucideIcons.chevronRight,
-      key: const ValueKey('chev'),
-      size: 16,
-      color: context.palette.inkFaint,
-    );
+    return const SizedBox.shrink(key: ValueKey('empty'));
   }
 
   /// Persist server URL + API key, reconnect the WebSocket, and pop back
@@ -144,10 +160,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             apiKey: apiKey,
           );
 
+      // Kick the WebSocket reconnect off in the background instead of
+      // awaiting it. WsClient.connect() awaits `_channel.ready` with a
+      // 5s timeout, so awaiting reconnectWithUrl here used to make the
+      // Done button feel "stuck" for up to 5 seconds when the new
+      // server URL was unreachable. The reconnect still runs — it just
+      // doesn't block navigation. The notifications page's connection
+      // chip already surfaces the live ws state, so the user gets
+      // feedback there if the new URL doesn't come up.
       final wsClient = ref.read(wsClientProvider);
       final settings = ref.read(settingsProvider);
-      await wsClient.reconnectWithUrl(settings.wsUrl,
-          newApiKey: settings.apiKey);
+      unawaited(wsClient.reconnectWithUrl(settings.wsUrl,
+          newApiKey: settings.apiKey));
 
       if (mounted) context.pop();
     } catch (e) {
@@ -363,14 +387,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ),
                 ),
               ),
-              const SettingsTileDivider(),
-              SettingsActionTile(
-                icon: LucideIcons.logOut,
-                label: l10n.settingsSignOut,
-                onTap: _signOut,
-                iconColor: colors.error,
-                labelColor: colors.error,
-              ),
             ],
           ),
           Padding(
@@ -477,6 +493,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ),
             ],
           ),
+
+          const SizedBox(height: 24),
+
+          // ── Sign out ────────────────────────────────────────
+          // Standalone destructive card at the very bottom, mirroring
+          // the iOS Settings convention where "Sign Out" lives on its
+          // own row away from any specific account field.
+          SettingsCard(
+            children: [
+              SettingsActionTile(
+                icon: LucideIcons.logOut,
+                label: l10n.settingsSignOut,
+                onTap: _signOut,
+                iconColor: colors.error,
+                labelColor: colors.error,
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -546,14 +580,22 @@ class _TextFieldTile extends StatelessWidget {
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
-                suffixIcon: suffixIcon,
-                suffixIconConstraints: const BoxConstraints(
-                  minWidth: 24,
-                  minHeight: 24,
-                ),
               ),
             ),
           ),
+          // Render the suffix as a sibling of the TextField instead of
+          // baking it into InputDecoration.suffixIcon. The decorator's
+          // suffixIcon path forces a minimum height/baseline shift that
+          // makes the obscured API key text drift out of vertical
+          // alignment with the left-side label and pushes its right
+          // edge inward, so the field above (without a suffix) and this
+          // one no longer line up. As a sibling, the eye icon takes a
+          // fixed slot at the right edge of the row and the TextField's
+          // baseline matches the URL row exactly.
+          if (suffixIcon != null) ...[
+            const SizedBox(width: 8),
+            suffixIcon!,
+          ],
         ],
       ),
     );

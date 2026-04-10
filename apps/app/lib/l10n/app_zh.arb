@@ -35,6 +35,7 @@
   "settingsServerAddress": "地址",
   "settingsServerPlaceholder": "http://localhost:8080",
   "settingsServerTestConnection": "测试连接",
+  "settingsServerTesting": "测试中…",
   "settingsServerConnected": "已连接",
   "settingsServerFailed": "失败",
 

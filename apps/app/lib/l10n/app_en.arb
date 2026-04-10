@@ -47,6 +47,7 @@
   "settingsServerAddress": "Address",
   "settingsServerPlaceholder": "http://localhost:8080",
   "settingsServerTestConnection": "Test Connection",
+  "settingsServerTesting": "Testing…",
   "settingsServerConnected": "Connected",
   "settingsServerFailed": "Failed",
 

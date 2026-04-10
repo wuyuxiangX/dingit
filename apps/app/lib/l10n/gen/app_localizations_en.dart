@@ -87,6 +87,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsServerTestConnection => 'Test Connection';
 
   @override
+  String get settingsServerTesting => 'Testing…';
+
+  @override
   String get settingsServerConnected => 'Connected';
 
   @override
