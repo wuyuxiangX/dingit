@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -55,6 +56,55 @@ func (r *PushRouter) UpdateBadge(ctx context.Context, badgeCount int) {
 
 // --- FCM Service (for Android, requires Google services / VPN in China) ---
 
+// PushProviderStats is a point-in-time snapshot of a push provider's
+// delivery health, surfaced via /api/health/debug (WYX-407). Zero values
+// mean "no activity yet", which the handler renders distinctively from
+// "most recent attempt failed".
+type PushProviderStats struct {
+	LastSuccessAt time.Time
+	LastErrorAt   time.Time
+	LastError     string
+}
+
+// pushHealthTracker records the outcome of the most recent push
+// delivery attempt from a single provider. Safe for concurrent use from
+// the fan-out sender goroutines; /api/health/debug reads it through
+// snapshot(). Kept dirt-simple on purpose — this is a health signal,
+// not a metric, so losing an update under heavy write contention is
+// fine (the Prometheus counters in the metrics package are the source
+// of truth for rates and totals).
+type pushHealthTracker struct {
+	mu            sync.RWMutex
+	lastSuccessAt time.Time
+	lastErrorAt   time.Time
+	lastError     string
+}
+
+func (t *pushHealthTracker) recordSuccess() {
+	now := time.Now()
+	t.mu.Lock()
+	t.lastSuccessAt = now
+	t.mu.Unlock()
+}
+
+func (t *pushHealthTracker) recordError(msg string) {
+	now := time.Now()
+	t.mu.Lock()
+	t.lastErrorAt = now
+	t.lastError = msg
+	t.mu.Unlock()
+}
+
+func (t *pushHealthTracker) snapshot() PushProviderStats {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return PushProviderStats{
+		LastSuccessAt: t.lastSuccessAt,
+		LastErrorAt:   t.lastErrorAt,
+		LastError:     t.lastError,
+	}
+}
+
 // fcmConcurrency bounds how many sendToDevice goroutines may be
 // in-flight at once. Same reasoning as apnsConcurrency.
 const fcmConcurrency = 64
@@ -68,6 +118,11 @@ type FcmService struct {
 	token     string
 	tokenExp  time.Time
 	creds     *google.Credentials
+
+	// stats records the outcome of the most recent FCM delivery attempt
+	// so /api/health/debug can report "is FCM actually working right
+	// now" without having to query Prometheus. See WYX-407.
+	stats pushHealthTracker
 }
 
 func NewFcmService(projectID string, deviceSvc *DeviceService) (*FcmService, error) {
@@ -143,11 +198,18 @@ func (s *FcmService) SendToAll(ctx context.Context, n *model.Notification) {
 	}
 }
 
+// Stats returns a snapshot of the most recent FCM delivery outcome.
+// Safe to call concurrently with active deliveries.
+func (s *FcmService) Stats() PushProviderStats {
+	return s.stats.snapshot()
+}
+
 func (s *FcmService) sendToDevice(ctx context.Context, deviceToken string, n *model.Notification) {
 	accessToken, err := s.getAccessToken(ctx)
 	if err != nil {
 		logger.Error("Failed to get FCM access token", zap.Error(err))
 		metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "error").Inc()
+		s.stats.recordError("get access token: " + err.Error())
 		return
 	}
 
@@ -173,6 +235,7 @@ func (s *FcmService) sendToDevice(ctx context.Context, deviceToken string, n *mo
 	if err != nil {
 		logger.Error("Failed to create FCM request", zap.Error(err))
 		metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "error").Inc()
+		s.stats.recordError("build request: " + err.Error())
 		return
 	}
 
@@ -183,11 +246,16 @@ func (s *FcmService) sendToDevice(ctx context.Context, deviceToken string, n *mo
 	if err != nil {
 		logger.Error("FCM request failed", zap.Error(err))
 		metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "error").Inc()
+		s.stats.recordError("transport: " + err.Error())
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 || resp.StatusCode == 410 {
+		// Invalid token means the *client* is stale, not that FCM is
+		// unhealthy — don't taint the provider-level error signal. The
+		// Prometheus counter still records it via the "invalid_token"
+		// label for drill-down.
 		logger.Info("Removing invalid FCM device token")
 		_ = s.deviceSvc.RemoveByToken(ctx, deviceToken)
 		metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "invalid_token").Inc()
@@ -198,8 +266,23 @@ func (s *FcmService) sendToDevice(ctx context.Context, deviceToken string, n *mo
 		respBody, _ := io.ReadAll(resp.Body)
 		logger.Error("FCM error", zap.Int("status", resp.StatusCode), zap.String("body", string(respBody)))
 		metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "error").Inc()
+		s.stats.recordError(fmt.Sprintf("http %d: %s", resp.StatusCode, truncateErrBody(respBody)))
 		return
 	}
 
 	metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "success").Inc()
+	s.stats.recordSuccess()
+}
+
+// truncateErrBody caps error-body strings stored on the health tracker so
+// a chatty upstream can't balloon the /api/health/debug response or pin a
+// long string in memory. 200 chars is enough to read an FCM/APNs JSON
+// error message without leaking full request traces.
+func truncateErrBody(b []byte) string {
+	const max = 200
+	s := strings.TrimSpace(string(b))
+	if len(s) > max {
+		return s[:max] + "..."
+	}
+	return s
 }

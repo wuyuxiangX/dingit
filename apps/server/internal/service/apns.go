@@ -52,6 +52,17 @@ type ApnsService struct {
 	mu       sync.Mutex
 	jwtToken string
 	jwtExp   time.Time
+
+	// stats records the outcome of the most recent APNs delivery
+	// attempt so /api/health/debug can report "is APNs actually working
+	// right now" without having to query Prometheus. See WYX-407.
+	stats pushHealthTracker
+}
+
+// Stats returns a snapshot of the most recent APNs delivery outcome.
+// Safe to call concurrently with active deliveries.
+func (s *ApnsService) Stats() PushProviderStats {
+	return s.stats.snapshot()
 }
 
 func NewApnsService(cfg ApnsConfig, deviceSvc *DeviceService) (*ApnsService, error) {
@@ -165,6 +176,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 	if err != nil {
 		logger.Error("Failed to get APNs JWT", zap.Error(err))
 		metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "error").Inc()
+		s.stats.recordError("get jwt: " + err.Error())
 		return
 	}
 
@@ -189,6 +201,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 	if err != nil {
 		logger.Error("Failed to create APNs request", zap.Error(err))
 		metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "error").Inc()
+		s.stats.recordError("build request: " + err.Error())
 		return
 	}
 
@@ -201,6 +214,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 	if err != nil {
 		logger.Error("APNs request failed", zap.Error(err))
 		metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "error").Inc()
+		s.stats.recordError("transport: " + err.Error())
 		return
 	}
 	defer resp.Body.Close()
@@ -208,13 +222,17 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 	if resp.StatusCode == 200 {
 		logger.Info("APNs push sent", zap.String("device", truncateToken(deviceToken)))
 		metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "success").Inc()
+		s.stats.recordSuccess()
 		return
 	}
 
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == 410 {
-		// Token is no longer valid — remove device
+		// Token is no longer valid — remove device. A stale client
+		// doesn't say anything about APNs health, so leave the stats
+		// tracker alone (Prometheus still records it via the
+		// "invalid_token" label).
 		logger.Info("Removing expired APNs token", zap.String("device", truncateToken(deviceToken)))
 		_ = s.deviceSvc.RemoveByToken(ctx, deviceToken)
 		metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "invalid_token").Inc()
@@ -226,6 +244,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 		zap.String("body", string(respBody)),
 	)
 	metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "error").Inc()
+	s.stats.recordError(fmt.Sprintf("http %d: %s", resp.StatusCode, truncateErrBody(respBody)))
 }
 
 // SendSilentBadgeUpdate sends a background (silent) APNs push to refresh badge

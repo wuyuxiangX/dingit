@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -117,6 +118,31 @@ type CallbackService struct {
 	// Production callers never touch this — NewCallbackService sets it
 	// to defaultCallbackBackoff which reproduces the exponential schedule.
 	retryBackoff func(attempt int) time.Duration
+
+	// inFlight counts callback deliveries currently executing
+	// (post-semaphore, pre-goroutine-exit). pending counts callers
+	// waiting on the semaphore. Both are surfaced via /api/health/debug
+	// (WYX-407) so operators can distinguish "healthy throughput" from
+	// "wedged on a slow upstream" at a glance. atomic.Int64 because the
+	// Deliver hot path must not take a mutex.
+	inFlight atomic.Int64
+	pending  atomic.Int64
+}
+
+// QueueStats is a point-in-time snapshot of the callback delivery
+// pipeline, surfaced via /api/health/debug.
+type QueueStats struct {
+	InFlight int64 // deliveries currently executing
+	Pending  int64 // callers blocked on the concurrency semaphore
+}
+
+// Stats returns the current callback queue depth. Safe to call
+// concurrently with live deliveries.
+func (s *CallbackService) Stats() QueueStats {
+	return QueueStats{
+		InFlight: s.inFlight.Load(),
+		Pending:  s.pending.Load(),
+	}
 }
 
 // defaultCallbackBackoff is the production retry schedule: 3s after the
@@ -181,17 +207,29 @@ func (s *CallbackService) Deliver(notification *model.Notification, response *mo
 	// of actions will block in the select rather than allocate a pile
 	// of sleeping goroutines. If we can't acquire within 2 seconds we
 	// drop the delivery and log — better than unbounded queueing.
+	//
+	// pending is bumped up front so /api/health/debug can see "callers
+	// waiting on the semaphore" distinct from "deliveries in flight".
+	// The decrement lives in both select arms to keep the counter
+	// balanced on the dropped-delivery path too.
+	s.pending.Add(1)
 	select {
 	case s.sem <- struct{}{}:
+		s.pending.Add(-1)
 	case <-time.After(2 * time.Second):
+		s.pending.Add(-1)
 		logger.Warn("Callback dropped: delivery queue saturated",
 			zap.String("url", *notification.CallbackURL),
 		)
 		metrics.CallbackDeliveryTotal.WithLabelValues("dropped", "none").Inc()
 		return
 	}
+	s.inFlight.Add(1)
 	go func() {
-		defer func() { <-s.sem }()
+		defer func() {
+			s.inFlight.Add(-1)
+			<-s.sem
+		}()
 		s.deliverWithRetry(*notification.CallbackURL, notification, response)
 	}()
 }
