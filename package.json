@@ -1,0 +1,15 @@
+{
+  "name": "dingit",
+  "private": true,
+  "description": "Dingit — Self-hosted interactive notifications (workspace root)",
+  "license": "MIT",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "docs:dev": "pnpm --filter @dingit/docs dev",
+    "docs:build": "pnpm --filter @dingit/docs build",
+    "docs:preview": "pnpm --filter @dingit/docs preview"
+  }
+}

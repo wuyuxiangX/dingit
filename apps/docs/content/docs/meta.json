@@ -1,0 +1,5 @@
+{
+  "title": "Dingit Docs",
+  "root": true,
+  "pages": ["index", "getting-started"]
+}

@@ -1,0 +1,46 @@
+---
+title: 欢迎
+description: Dingit — 自托管的可交互通知系统，为你的脚本、服务器和日常生活服务。
+---
+
+**Dingit** 是一套自托管的通知系统，自带三个一等公民客户端（Server、Flutter App、Go CLI）。和普通推送服务不同，每条 Dingit 通知都可以携带 **Action 按钮** 和可选的 **callback 回调钩子** —— App 上一次点击，你的脚本立刻收到回调。
+
+<Cards>
+  <Card
+    title="5 分钟快速上手"
+    href="/zh/docs/getting-started/first-notification"
+    description="curl → App 响铃 → callback，端到端一次跑通。"
+  />
+  <Card
+    title="核心概念"
+    href="/zh/docs/getting-started/concepts"
+    description="Source、Status、Actions、Callback —— 一页读懂完整模型。"
+  />
+  <Card
+    title="自托管服务端"
+    href="/zh/docs/server/deploy-docker"
+    description="docker-compose、systemd、云平台 —— 选一个就发。"
+  />
+  <Card
+    title="API 参考"
+    href="/zh/docs/api/reference"
+    description="OpenAPI 驱动的交互式文档，Try-it-out 开箱即用。"
+  />
+</Cards>
+
+## 为什么选 Dingit？
+
+| 你的场景 | Dingit 给你 |
+|---------|------------|
+| 一个长跑脚本（训练、备份、爬虫） | 一个真的会告诉你跑完了的响铃 |
+| 一条偶尔会默默失败的 CI 流水线 | 一个带 "Rerun" 按钮、可以回调进 CI 重跑的推送 |
+| 一个有 10 个地方需要关注的家庭实验室 | 一个卡片堆、三台设备、状态同步 |
+| 对数据归属权的强烈执念 | 你的 PostgreSQL、你的服务器、零第三方锁定 |
+
+## 三个客户端
+
+- **Server**（Go）— REST + WebSocket，PostgreSQL 持久化，Prometheus 指标，版本化 schema 迁移。
+- **App**（Flutter）— iOS、Android、Web、macOS。卡片堆栈 UI、编辑风字体、温暖纸张质感。
+- **CLI**（Go）— 单一二进制，`curl | sh` 一行安装，脚本友好的子命令。
+
+一条通知，三个入口，一个一致的模型。这就是 Dingit 的全部。

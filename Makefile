@@ -1,4 +1,4 @@
-.PHONY: setup codegen dev-server dev-app test format analyze check-theme-i18n clean build-cli build-server
+.PHONY: setup codegen dev-server dev-app test format analyze check-theme-i18n clean build-cli build-server docs-install docs-dev docs-build docs-start docs-clean
 
 setup:
 	dart pub global activate melos
@@ -49,3 +49,23 @@ clean:
 	cd apps/app && flutter clean
 	rm -f apps/server/dingit-server
 	rm -f apps/cli/dingit
+
+# ── Docs site (apps/docs) ──────────────────────────────────────────────────
+# Fumadocs + Next.js 16 + Tailwind v4, deployed to docs.dingit.me.
+# Managed from the root via pnpm workspace — never cd into apps/docs to run
+# these, always go through the workspace filter so the lockfile stays at root.
+
+docs-install:
+	pnpm install
+
+docs-dev:
+	pnpm --filter @dingit/docs dev
+
+docs-build:
+	pnpm --filter @dingit/docs build
+
+docs-start:
+	pnpm --filter @dingit/docs start
+
+docs-clean:
+	rm -rf apps/docs/.next apps/docs/.source apps/docs/node_modules
