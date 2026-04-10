@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net/url"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -8,6 +9,21 @@ import (
 
 	"github.com/dingit-me/server/internal/pkg/logger"
 )
+
+// redactQuery returns an encoded query string with any sensitiveQueryKeys
+// removed, so secrets passed through the URL never land in logs.
+func redactQuery(q url.Values) string {
+	for k := range sensitiveQueryKeys {
+		q.Del(k)
+	}
+	return q.Encode()
+}
+
+// sensitiveQueryKeys are stripped from the logged query string. Keep this
+// in sync with any secret-bearing query parameter the server accepts.
+var sensitiveQueryKeys = map[string]bool{
+	"api_key": true,
+}
 
 func RequestLog() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -27,8 +43,11 @@ func RequestLog() gin.HandlerFunc {
 			zap.Duration("latency", latency),
 		}
 
-		if query := c.Request.URL.RawQuery; query != "" {
-			fields = append(fields, zap.String("query", query))
+		if c.Request.URL.RawQuery != "" {
+			redacted := redactQuery(c.Request.URL.Query())
+			if redacted != "" {
+				fields = append(fields, zap.String("query", redacted))
+			}
 		}
 
 		switch {

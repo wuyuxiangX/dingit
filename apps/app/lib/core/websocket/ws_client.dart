@@ -67,10 +67,22 @@ class WsClient {
       _channel = null;
 
       var uri = Uri.parse(url);
+      final extraQuery = <String, String>{};
       if (lastSyncAt != null) {
+        extraQuery['since'] = lastSyncAt!.toUtc().toIso8601String();
+      }
+      // Pass the API key as both a header (IOWebSocketChannel on mobile)
+      // AND a query param (browser WebSocket API, which cannot set upgrade
+      // headers). The server strips `api_key` from request logs so it
+      // never ends up on disk. Without this the server cannot tell this
+      // client apart from an unauthenticated attacker.
+      if (apiKey != null && apiKey!.isNotEmpty) {
+        extraQuery['api_key'] = apiKey!;
+      }
+      if (extraQuery.isNotEmpty) {
         uri = uri.replace(queryParameters: {
           ...uri.queryParameters,
-          'since': lastSyncAt!.toUtc().toIso8601String(),
+          ...extraQuery,
         });
       }
       final headers = <String, dynamic>{};

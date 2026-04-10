@@ -44,6 +44,16 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Reject unsafe callback URLs at ingress so we never persist a row
+	// that points at an internal address. Fail-closed: if validation
+	// can't resolve the DNS, we return BadRequest rather than storing it.
+	if req.CallbackURL != nil && *req.CallbackURL != "" {
+		if err := h.callbackSvc.Validate(*req.CallbackURL); err != nil {
+			response.BadRequest(c, response.CodeBadRequest, "invalid callback_url: "+err.Error())
+			return
+		}
+	}
+
 	source := req.Source
 	if source == "" {
 		source = "unknown"
@@ -100,10 +110,19 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 
 	h.hub.Broadcast(model.NewNotificationNewMsg(created))
 
-	// Send push notification with current pending count as badge
-	pending := model.StatusPending
-	pendingCount, _ := h.store.Count(c.Request.Context(), &pending, nil)
-	h.pushRouter.SendToAll(context.Background(), created, pendingCount)
+	// Fire push fan-out from a detached context so it survives the
+	// client disconnecting, but bound it with its own timeout so a
+	// slow push API can't tie up goroutines forever. WithoutCancel
+	// (Go 1.21+) strips the request's cancel signal while preserving
+	// any request-scoped values (trace IDs, etc).
+	reqCtx := context.WithoutCancel(c.Request.Context())
+	go func() {
+		bgCtx, cancel := context.WithTimeout(reqCtx, 30*time.Second)
+		defer cancel()
+		pending := model.StatusPending
+		pendingCount, _ := h.store.Count(bgCtx, &pending, nil)
+		h.pushRouter.SendToAll(bgCtx, created, pendingCount)
+	}()
 
 	response.Created(c, gin.H{
 		"id":        created.ID,
@@ -209,10 +228,17 @@ func (h *NotificationHandler) Update(c *gin.Context) {
 
 	// Sync badge across all iOS devices when pending count changes.
 	// Any status change away from "pending" reduces the count.
+	// Same detached-ctx pattern as Create: survive client disconnect,
+	// own timeout, no request-lifecycle coupling.
 	if *req.Status == model.StatusDismissed || *req.Status == model.StatusActioned || *req.Status == model.StatusExpired {
-		pending := model.StatusPending
-		newCount, _ := h.store.Count(context.Background(), &pending, nil)
-		h.pushRouter.UpdateBadge(context.Background(), newCount)
+		reqCtx := context.WithoutCancel(ctx)
+		go func() {
+			bgCtx, cancel := context.WithTimeout(reqCtx, 30*time.Second)
+			defer cancel()
+			pending := model.StatusPending
+			newCount, _ := h.store.Count(bgCtx, &pending, nil)
+			h.pushRouter.UpdateBadge(bgCtx, newCount)
+		}()
 	}
 
 	if *req.Status == model.StatusActioned && updated.CallbackURL != nil && req.ActionedValue != nil {

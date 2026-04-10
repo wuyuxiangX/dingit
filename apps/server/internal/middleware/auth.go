@@ -48,5 +48,14 @@ func extractAPIKey(r *http.Request) string {
 	if key := r.Header.Get("X-API-Key"); key != "" {
 		return key
 	}
+	// WebSocket clients that cannot set headers during upgrade (e.g. browser
+	// WebSocket API) can pass the key as a query parameter. Only read this
+	// for the /ws path so the key never ends up in request logs for regular
+	// HTTP routes.
+	if r.URL.Path == "/ws" {
+		if key := r.URL.Query().Get("api_key"); key != "" {
+			return key
+		}
+	}
 	return ""
 }

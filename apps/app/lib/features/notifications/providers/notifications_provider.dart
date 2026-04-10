@@ -77,6 +77,7 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
     ref.onDispose(() {
       _mounted = false;
       _debounce?.cancel();
+      _badgeDebounce?.cancel();
       for (final t in _pendingCommits.values) {
         t.cancel();
       }
@@ -106,11 +107,20 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
   /// Sync iOS app icon badge to the current pending notification count.
   /// Called after every state mutation so the badge always matches what
   /// the user would see if they opened the app.
+  ///
+  /// Debounced: a rapid burst of WS updates (e.g. on reconnect) used to
+  /// fire N platform-channel calls per burst. 200ms is short enough the
+  /// user never notices, long enough to collapse a full sync into one
+  /// call.
+  Timer? _badgeDebounce;
   void _syncBadge() {
-    final pendingCount = state
-        .where((n) => n.status == NotificationStatus.pending)
-        .length;
-    BadgeService.setCount(pendingCount);
+    _badgeDebounce?.cancel();
+    _badgeDebounce = Timer(const Duration(milliseconds: 200), () {
+      final pendingCount = state
+          .where((n) => n.status == NotificationStatus.pending)
+          .length;
+      BadgeService.setCount(pendingCount);
+    });
   }
 
   Timer? _debounce;
@@ -162,10 +172,17 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
 
   /// Respond to a notification with an action value (e.g. "approve").
   ///
-  /// Optimistically updates local state to actioned, sends the action over
-  /// WebSocket (for realtime broadcast), and also sends an HTTP PATCH as a
-  /// reliable fallback. On failure, rolls back just this notification and
-  /// surfaces a human-readable error on [errorStream].
+  /// Optimistically updates local state to actioned, then sends an HTTP
+  /// PATCH as the single source of truth. The server broadcasts a
+  /// `notification.updated` message over the hub after the write succeeds,
+  /// so every other connected client sees the change in realtime via the
+  /// same path as any other update. On failure we roll back just this
+  /// notification and surface a human-readable error on [errorStream].
+  ///
+  /// We deliberately do NOT also send the action over the WebSocket.
+  /// Previously we did both, and because the server fanned out to
+  /// `callbackSvc.Deliver` on both the WS handler and the HTTP handler,
+  /// customer webhooks fired twice per action. One path, one side effect.
   void respondToNotification(String id, String actionValue) {
     final current = _findById(id);
     if (current == null) return;
@@ -188,17 +205,9 @@ class NotificationsNotifier extends Notifier<List<NotificationModel>> {
     _persistCache();
     _syncBadge();
 
-    // WS for realtime broadcast (other clients see the change immediately)
-    final wsClient = ref.read(wsClientProvider);
-    wsClient.send(WsMessage.actionResponse(
-      response: ActionResponse(
-        notificationId: id,
-        action: actionValue,
-        timestamp: DateTime.now().toUtc(),
-      ),
-    ));
-
-    // HTTP as the authoritative, retryable source of truth
+    // HTTP is the authoritative, retryable source of truth. The server
+    // rebroadcasts `notification.updated` to the hub after the write,
+    // so other clients still see the change in realtime.
     _commitAction(id, actionValue);
   }
 

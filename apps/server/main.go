@@ -112,10 +112,40 @@ func main() {
 		if _, err := apiKeySvc.Create(ctx, "auto-generated", rawKey); err != nil {
 			logger.Fatal("Failed to save API key", zap.Error(err))
 		}
+
+		// Write the full key to a 0600 file so operators can recover it
+		// even if they missed the stderr banner. Preferred location is
+		// /secrets (the docker volume mount); fall back to the CWD so
+		// the file always lands somewhere.
+		keyFilePath := "/secrets/.initial-api-key"
+		if _, err := os.Stat("/secrets"); err != nil {
+			keyFilePath = ".initial-api-key"
+		}
+		writeErr := os.WriteFile(keyFilePath, []byte(rawKey+"\n"), 0o600)
+
+		// Print the full key to stderr with a loud banner. Stderr bypasses
+		// the structured logger so it always shows even under JSON mode,
+		// and ops scripts can grep for the banner marker.
+		banner := "\n" +
+			"================================================================\n" +
+			"  DINGIT: initial API key generated (first run)\n" +
+			"  Save this value — the full key cannot be recovered from the DB.\n" +
+			"----------------------------------------------------------------\n" +
+			"  " + rawKey + "\n" +
+			"================================================================\n"
+		if writeErr == nil {
+			banner += "  Also written to: " + keyFilePath + " (chmod 600)\n"
+		} else {
+			banner += "  WARNING: failed to persist key file: " + writeErr.Error() + "\n"
+		}
+		fmt.Fprint(os.Stderr, banner)
+
+		// The structured log still gets a record, but only with the prefix
+		// so the full key never ends up in log aggregation / SIEM.
 		logger.Info("No API keys found. Generated initial key",
 			zap.String("key_prefix", rawKey[:15]+"..."),
+			zap.String("key_file", keyFilePath),
 		)
-		logger.Warn("Save this key — it will not be shown again")
 	}
 
 	// WebSocket Hub
@@ -153,7 +183,7 @@ func main() {
 	// Handlers
 	notificationHandler := handler.NewNotificationHandler(store, hub, callbackSvc, pushRouter)
 	healthHandler := handler.NewHealthHandler(store, hub)
-	wsHandler := handler.NewWsHandler(store, hub)
+	wsHandler := handler.NewWsHandler(store, hub, cfg.CORS)
 	deviceHandler := handler.NewDeviceHandler(deviceSvc)
 
 	// Router
@@ -165,10 +195,18 @@ func main() {
 	r.Use(middleware.CORS(cfg.CORS))
 	r.Use(middleware.RequestLog())
 
-	// API Key auth middleware
+	// Per-IP rate limit BEFORE auth. This caps the damage from anyone
+	// brute-forcing API keys — without it, every invalid key cost us a
+	// DB query with no throttle. Limits are generous so legitimate
+	// clients never notice (50 rps burst 100 per IP).
+	r.Use(middleware.IPRateLimit(50, 100))
+
+	// API Key auth middleware. Only /health is exempt — /ws now requires
+	// the same API key as the REST API, either via Authorization header,
+	// X-API-Key header, or ?api_key= query param (for browser clients
+	// that cannot set headers during the WebSocket upgrade).
 	r.Use(middleware.APIKeyAuth(apiKeySvc, map[string]bool{
 		"/health": true,
-		"/ws":     true,
 	}))
 
 	// Rate limiting (after auth, so api_key_id is available)
@@ -192,6 +230,9 @@ func main() {
 		api.PATCH("/notifications/:id", notificationHandler.Update)
 		api.DELETE("/notifications/:id", notificationHandler.Delete)
 		api.POST("/devices", deviceHandler.Register)
+		// Verbose health view is authenticated so unauthenticated
+		// clients can't enumerate connection counts or queue depth.
+		api.GET("/health/debug", healthHandler.HealthDebug)
 	}
 
 	// Server with timeouts and graceful shutdown
@@ -219,7 +260,9 @@ func main() {
 	<-quit
 
 	logger.Info("Shutting down server...")
-	ctxCancel() // stop expiry service before closing hub
+	ctxCancel()                 // stop expiry service before closing hub
+	middleware.StopLimiterGC() // stop rate-limiter sweeper goroutines
+	apiKeySvc.Stop()           // drain last_used_at batcher
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

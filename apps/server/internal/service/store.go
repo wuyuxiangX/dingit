@@ -120,6 +120,14 @@ func buildWhereClause(status *model.NotificationStatus, priority *model.Notifica
 	return " WHERE " + strings.Join(conditions, " AND "), args, argIdx
 }
 
+// UpdateStatus transitions a pending notification to a new status. The
+// `WHERE status = 'pending'` guard makes this a true state-machine edge:
+// double submits (e.g. WS + HTTP fired from the same client, or two
+// clients racing on the same card) return nil from the second caller so
+// downstream callback delivery fires exactly once. The 'expired' sweeper
+// still needs to flip rows from pending, so we keep the pending guard
+// there too; any other caller that wants to mutate a non-pending row
+// should add its own explicit API instead of broadening this one.
 func (s *Store) UpdateStatus(ctx context.Context, id string, status model.NotificationStatus, actionedValue *string) (*model.Notification, error) {
 	var actionedAt *time.Time
 	if status == model.StatusActioned {
@@ -129,7 +137,7 @@ func (s *Store) UpdateStatus(ctx context.Context, id string, status model.Notifi
 
 	return s.scanOne(ctx, `
 		UPDATE notifications SET status = $1, actioned_value = $2, actioned_at = $3
-		WHERE id = $4
+		WHERE id = $4 AND status = 'pending'
 		RETURNING `+notificationColumns,
 		string(status), actionedValue, actionedAt, id)
 }
