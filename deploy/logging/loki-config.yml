@@ -1,0 +1,71 @@
+# Loki single-binary config for the Dingit reference logging stack
+# (WYX-408). Everything runs in one process, all state lives on a
+# docker volume. This is the simplest config that can ingest and
+# serve logs — if you're looking at this file to scale it up, you
+# probably want the production-ready helm chart instead.
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  # Accept slightly longer log lines than the default (65536) because
+  # zap's stack-trace JSON can blow past that on panics.
+  grpc_server_max_recv_msg_size: 10485760
+  grpc_server_max_send_msg_size: 10485760
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # Bumped from the default so dev workloads with chatty restarts
+  # don't trip the "per-stream rate limit exceeded" trap.
+  ingestion_rate_mb: 16
+  ingestion_burst_size_mb: 32
+  max_query_series: 10000
+  # Keep logs for two weeks by default — plenty for dev/forensics,
+  # small enough that the filesystem volume doesn't balloon.
+  retention_period: 336h
+  # Allow up to 10 labels per stream so promtail can attach the
+  # container name + level + source without hitting the cap.
+  max_label_names_per_series: 30
+  allow_structured_metadata: true
+
+compactor:
+  working_directory: /loki/compactor
+  delete_request_store: filesystem
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-temp
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+
+analytics:
+  reporting_enabled: false

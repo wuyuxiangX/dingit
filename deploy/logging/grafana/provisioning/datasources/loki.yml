@@ -1,0 +1,15 @@
+# Auto-provision the Loki datasource on first Grafana boot so
+# operators never have to click through the Connections UI to wire
+# this up. Matches the UID the pre-provisioned dashboard references.
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    uid: dingit-loki
+    isDefault: true
+    editable: true
+    jsonData:
+      maxLines: 5000

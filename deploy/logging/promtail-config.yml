@@ -1,0 +1,75 @@
+# Promtail config for the Dingit reference logging stack (WYX-408).
+#
+# Strategy: use the docker service discovery plumbing to enumerate
+# every container on the host, then drop everything that isn't the
+# dingit-server container. This keeps the ingested stream small so
+# Grafana doesn't have to wade through postgres vacuum chatter or
+# promtail's own heartbeat logs to find a zap record.
+#
+# Promtail parses Docker's JSON log file format to recover the
+# original stdout line, then parses that line as JSON to promote
+# zap's "level" / "source" fields into Loki labels.
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        # Only pick up containers that are actually running. Exited
+        # containers' logs stay on disk but we don't need to replay
+        # them every time promtail restarts.
+        filters:
+          - name: status
+            values: ["running"]
+    relabel_configs:
+      # Promote the docker container name (minus the leading slash)
+      # into a `container` label that the Grafana dashboard can
+      # filter on. This is the label Dingit dashboards assume — if
+      # you rename the container, update the dashboard query.
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: "container"
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: "stream"
+      - source_labels: ["__meta_docker_container_id"]
+        target_label: "container_id"
+      # Drop every container whose name isn't dingit-server. If you
+      # want to ingest more services, change this regex to an
+      # alternation like `(dingit-server|postgres)`.
+      - source_labels: ["container"]
+        regex: "dingit-server"
+        action: "keep"
+    pipeline_stages:
+      # Docker wraps each stdout line as {"log":"...","stream":"stdout","time":"..."}
+      # Unwrap it so downstream stages see the raw server line.
+      - json:
+          expressions:
+            output: log
+            stream: stream
+            timestamp: time
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+      - output:
+          source: output
+      # Now parse the zap JSON itself to lift level / source into
+      # real labels. "source" is the Dingit notification source tag
+      # (e.g. "ci-pipeline") — useful for filtering in Explore.
+      - json:
+          expressions:
+            level: level
+            log_source: source
+            msg: msg
+      - labels:
+          level:
+          log_source:

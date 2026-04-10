@@ -1,0 +1,84 @@
+# Reference logging stack for Dingit — Loki + Grafana + Promtail.
+#
+# Purpose (WYX-408): the server already emits structured zap JSON on
+# stdout, but operators had no canned way to aggregate those lines
+# across restarts. This compose file stands up a one-box log pipeline:
+#
+#   dingit-server stdout  →  docker json file  →  promtail  →  loki  →  grafana
+#
+# Zero changes are required in the Dingit server itself. Promtail
+# attaches to the host's Docker socket and scrapes the container
+# whose name matches `dingit-server` (see promtail-config.yml).
+#
+# Run alongside the main stack:
+#
+#   docker compose -f deploy/docker-compose.yml up -d
+#   docker compose -f deploy/logging/docker-compose.yml up -d
+#
+# Then open http://localhost:3000 (admin / admin) and check the
+# pre-provisioned "Dingit · Logs" dashboard.
+#
+# This is a single-binary development recipe — Loki runs with
+# filesystem storage and no auth. For production you'd point it at
+# S3/GCS and front Grafana with an auth proxy.
+
+name: dingit-logging
+
+services:
+  loki:
+    image: grafana/loki:3.3.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yml"]
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./loki-config.yml:/etc/loki/local-config.yml:ro
+      - loki-data:/loki
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/promtail/config.yml"]
+    depends_on:
+      loki:
+        condition: service_healthy
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      # Tail the Docker JSON log driver's raw files for every
+      # container on this host. The promtail config filters down to
+      # the dingit-server container by name.
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      # Host Docker socket so promtail can resolve container metadata
+      # (labels, names) when a new container starts.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail-positions:/tmp
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    restart: unless-stopped
+    depends_on:
+      loki:
+        condition: service_healthy
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      # Disable the sign-up screen and anonymous access so this
+      # recipe stays a single-user dev tool by default.
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  loki-data:
+  promtail-positions:
+  grafana-data:

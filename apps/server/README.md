@@ -212,3 +212,71 @@ curl -i http://localhost:8080/metrics
 # With auth — returns text/plain with dingit_* metric families
 curl -H "Authorization: Bearer $DINGIT_API_KEY" http://localhost:8080/metrics | grep ^dingit_
 ```
+
+## Log aggregation (Loki stack)
+
+Metrics tell you how much is happening; logs tell you *what*. The server
+already emits structured [zap](https://github.com/uber-go/zap) JSON on
+stdout, and [`deploy/logging/`](../../deploy/logging/) contains a
+one-command reference stack that ingests those lines into Loki and
+renders them in a pre-provisioned Grafana dashboard.
+
+### What you get
+
+* **Loki** — log store, filesystem-backed single binary. Fine for dev
+  forensics and single-box deployments; point it at S3/GCS if you
+  grow beyond that.
+* **Promtail** — tails the host Docker JSON log files, keeps only the
+  `dingit-server` container by default, and promotes zap's `level` and
+  `source` fields into Loki labels.
+* **Grafana** — pre-provisioned with the Loki datasource *and* a
+  "Dingit · Logs" dashboard (log rate by level, recent warn/error
+  panel, per-source volume).
+
+Zero changes to the server are required. If you rename the Dingit
+container away from `dingit-server`, update the `relabel_configs`
+regex in `deploy/logging/promtail-config.yml` and the `container=`
+label in `deploy/logging/grafana/dashboards/dingit-logs.json`.
+
+### Bringing the stack up
+
+The logging stack runs in its *own* compose project (`dingit-logging`)
+so it sits next to the main production stack without touching it:
+
+```sh
+# In one terminal — the main app (once, if not already running)
+docker compose -f deploy/docker-compose.yml up -d
+
+# In another — the logging sidecar
+docker compose -f deploy/logging/docker-compose.yml up -d
+```
+
+Then open **<http://localhost:3000>** and log in with `admin` / `admin`.
+Grafana will have the Loki datasource pre-wired and the "Dingit · Logs"
+dashboard inside the "Dingit" folder. Override the defaults with
+`GRAFANA_USER` / `GRAFANA_PASSWORD` / `LOKI_PORT` / `GRAFANA_PORT` in
+your shell if the defaults collide with something else on your box.
+
+### Verifying end-to-end
+
+```sh
+# Generate a few log lines by sending test notifications
+curl -X POST http://localhost:8080/api/notifications \
+  -H "Authorization: Bearer $DINGIT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Loki test","body":"hello world","source":"loki-smoke-test"}'
+
+# In Grafana → Explore → pick the Loki datasource → run:
+#   {container="dingit-server"}
+# You should see the zap JSON lines streaming in real time, and the
+# "Notifications by source" dashboard panel should show a bar for
+# "loki-smoke-test".
+```
+
+### Tearing it down
+
+```sh
+docker compose -f deploy/logging/docker-compose.yml down
+# ...or with volumes (wipes ingested logs + Grafana user state):
+docker compose -f deploy/logging/docker-compose.yml down -v
+```

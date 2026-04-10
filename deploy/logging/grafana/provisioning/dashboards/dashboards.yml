@@ -1,0 +1,15 @@
+# Point Grafana at the directory where dingit-logs.json lives so it
+# gets loaded on first boot as a real dashboard, not just a sample.
+apiVersion: 1
+
+providers:
+  - name: "Dingit"
+    orgId: 1
+    folder: "Dingit"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
