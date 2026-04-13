@@ -1,4 +1,4 @@
-.PHONY: setup codegen dev-server dev-app test format analyze check-theme-i18n clean build-cli build-server docs-install docs-dev docs-build docs-start docs-clean
+.PHONY: setup codegen dev-server dev-app test format analyze check-theme-i18n clean build-cli build-server swagger docs-install docs-dev docs-build docs-start docs-clean
 
 # ── Build metadata (WYX-411) ───────────────────────────────────────────────
 # Injected into Go binaries at link time via -ldflags -X so both
@@ -71,6 +71,9 @@ build-server:
 
 build-cli:
 	cd apps/cli && go build $(BUILD_LDFLAGS_CLI) -o dingit .
+
+swagger:
+	cd apps/server && swag init --output internal/docs --parseDependency --parseInternal
 
 clean:
 	melos clean

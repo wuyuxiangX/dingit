@@ -1,0 +1,467 @@
+basePath: /
+definitions:
+  handler.createRequest:
+    properties:
+      actions:
+        items:
+          $ref: '#/definitions/model.NotificationAction'
+        type: array
+      body:
+        type: string
+      callback_url:
+        type: string
+      expires_at:
+        type: string
+      icon:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      priority:
+        type: string
+      source:
+        type: string
+      title:
+        type: string
+      ttl:
+        type: integer
+    required:
+    - body
+    - title
+    type: object
+  handler.createResponse:
+    properties:
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      status:
+        example: pending
+        type: string
+      timestamp:
+        example: "2026-04-12T10:30:00Z"
+        type: string
+    type: object
+  handler.healthStatus:
+    properties:
+      status:
+        example: ok
+        type: string
+    type: object
+  handler.registerDeviceRequest:
+    properties:
+      platform:
+        type: string
+      token:
+        type: string
+    required:
+    - token
+    type: object
+  handler.updateRequest:
+    properties:
+      actioned_value:
+        type: string
+      status:
+        $ref: '#/definitions/model.NotificationStatus'
+    type: object
+  model.Notification:
+    properties:
+      actioned_at:
+        type: string
+      actioned_value:
+        type: string
+      actions:
+        items:
+          $ref: '#/definitions/model.NotificationAction'
+        type: array
+      body:
+        type: string
+      callback_url:
+        type: string
+      expires_at:
+        type: string
+      icon:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      priority:
+        $ref: '#/definitions/model.NotificationPriority'
+      source:
+        type: string
+      status:
+        $ref: '#/definitions/model.NotificationStatus'
+      timestamp:
+        type: string
+      title:
+        type: string
+    type: object
+  model.NotificationAction:
+    properties:
+      color_hex:
+        type: string
+      destructive:
+        type: boolean
+      icon:
+        type: string
+      label:
+        type: string
+      value:
+        type: string
+    type: object
+  model.NotificationPriority:
+    enum:
+    - urgent
+    - high
+    - normal
+    - low
+    type: string
+    x-enum-varnames:
+    - PriorityUrgent
+    - PriorityHigh
+    - PriorityNormal
+    - PriorityLow
+  model.NotificationStatus:
+    enum:
+    - pending
+    - actioned
+    - dismissed
+    - expired
+    type: string
+    x-enum-varnames:
+    - StatusPending
+    - StatusActioned
+    - StatusDismissed
+    - StatusExpired
+  pagination.Result-model_Notification:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/model.Notification'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  response.Response:
+    properties:
+      code:
+        type: integer
+      data: {}
+      message:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Interactive notification system — push, poll, and act on notifications
+    in real time.
+  title: DingIt API
+  version: "1.2"
+paths:
+  /api/devices:
+    post:
+      consumes:
+      - application/json
+      description: Register a device token for push notifications (APNs or FCM).
+      parameters:
+      - description: Device token and platform
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.registerDeviceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Registered device
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Invalid token or platform
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal error
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Register a device
+      tags:
+      - devices
+  /api/health/debug:
+    get:
+      description: Authenticated verbose health view with DB ping, push provider status,
+        callback queue depth, WebSocket client count, and build metadata.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Verbose health
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Debug health (verbose)
+      tags:
+      - health
+  /api/notifications:
+    get:
+      description: Retrieve a paginated list of notifications, optionally filtered
+        by status and priority.
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: page_size
+        type: integer
+      - description: Filter by status
+        enum:
+        - pending
+        - actioned
+        - dismissed
+        - expired
+        in: query
+        name: status
+        type: string
+      - description: Filter by priority
+        enum:
+        - urgent
+        - high
+        - normal
+        - low
+        in: query
+        name: priority
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/pagination.Result-model_Notification'
+              type: object
+        "400":
+          description: Invalid filter
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal error
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: List notifications
+      tags:
+      - notifications
+    post:
+      consumes:
+      - application/json
+      description: Send a new notification to all connected clients via WebSocket
+        and push.
+      parameters:
+      - description: Notification payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.createRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Notification created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.createResponse'
+              type: object
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal error
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Create a notification
+      tags:
+      - notifications
+  /api/notifications/{id}:
+    delete:
+      description: Permanently remove a notification by its ID.
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal error
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Delete a notification
+      tags:
+      - notifications
+    get:
+      description: Retrieve a single notification by its ID.
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Notification found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.Notification'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal error
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Get a notification
+      tags:
+      - notifications
+    patch:
+      consumes:
+      - application/json
+      description: Update the status of a notification (e.g. mark as actioned or dismissed).
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Status update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.updateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated notification
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.Notification'
+              type: object
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal error
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - BearerAuth: []
+      summary: Update notification status
+      tags:
+      - notifications
+  /health:
+    get:
+      description: Public, unauthenticated liveness probe. Returns "ok" or "degraded".
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Server health
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.healthStatus'
+              type: object
+      summary: Health check
+      tags:
+      - health
+securityDefinitions:
+  BearerAuth:
+    description: API key prefixed with "Bearer "
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

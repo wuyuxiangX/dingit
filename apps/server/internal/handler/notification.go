@@ -39,6 +39,32 @@ func NewNotificationHandler(store notificationStore, hub *ws.Hub, callbackSvc *s
 	return &NotificationHandler{store: store, hub: hub, callbackSvc: callbackSvc, pushRouter: pushRouter}
 }
 
+// detachedPush runs fn in a background goroutine with a context that
+// survives the request completing or the client disconnecting, bounded
+// by its own 30s timeout. fn receives a freshly-computed count of
+// pending notifications so push-router calls can sync iOS badge numbers
+// without each caller re-querying the store.
+//
+// context.WithoutCancel (Go 1.21+) strips the request's cancel signal
+// while preserving request-scoped values (trace IDs, etc).
+func (h *NotificationHandler) detachedPush(reqCtx context.Context, fn func(ctx context.Context, pendingCount int)) {
+	bgCtx := context.WithoutCancel(reqCtx)
+	go func() {
+		ctx, cancel := context.WithTimeout(bgCtx, 30*time.Second)
+		defer cancel()
+		pending := model.StatusPending
+		count, _ := h.store.Count(ctx, &pending, nil)
+		fn(ctx, count)
+	}()
+}
+
+// createResponse is the data field returned by POST /api/notifications.
+type createResponse struct {
+	ID        string `json:"id"        example:"550e8400-e29b-41d4-a716-446655440000"`
+	Status    string `json:"status"    example:"pending"`
+	Timestamp string `json:"timestamp" example:"2026-04-12T10:30:00Z"`
+}
+
 type createRequest struct {
 	Title       string                     `json:"title" binding:"required"`
 	Body        string                     `json:"body" binding:"required"`
@@ -52,6 +78,20 @@ type createRequest struct {
 	ExpiresAt   *string                    `json:"expires_at"`
 }
 
+// Create godoc
+//
+//	@Summary		Create a notification
+//	@Description	Send a new notification to all connected clients via WebSocket and push.
+//	@Tags			notifications
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		createRequest								true	"Notification payload"
+//	@Success		201		{object}	response.Response{data=createResponse}		"Notification created"
+//	@Failure		400		{object}	response.Response							"Validation error"
+//	@Failure		401		{object}	response.Response							"Unauthorized"
+//	@Failure		500		{object}	response.Response							"Internal error"
+//	@Security		BearerAuth
+//	@Router			/api/notifications [post]
 func (h *NotificationHandler) Create(c *gin.Context) {
 	var req createRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -125,19 +165,9 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 
 	h.hub.Broadcast(model.NewNotificationNewMsg(created))
 
-	// Fire push fan-out from a detached context so it survives the
-	// client disconnecting, but bound it with its own timeout so a
-	// slow push API can't tie up goroutines forever. WithoutCancel
-	// (Go 1.21+) strips the request's cancel signal while preserving
-	// any request-scoped values (trace IDs, etc).
-	reqCtx := context.WithoutCancel(c.Request.Context())
-	go func() {
-		bgCtx, cancel := context.WithTimeout(reqCtx, 30*time.Second)
-		defer cancel()
-		pending := model.StatusPending
-		pendingCount, _ := h.store.Count(bgCtx, &pending, nil)
-		h.pushRouter.SendToAll(bgCtx, created, pendingCount)
-	}()
+	h.detachedPush(c.Request.Context(), func(ctx context.Context, count int) {
+		h.pushRouter.SendToAll(ctx, created, count)
+	})
 
 	response.Created(c, gin.H{
 		"id":        created.ID,
@@ -146,6 +176,22 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 	})
 }
 
+// List godoc
+//
+//	@Summary		List notifications
+//	@Description	Retrieve a paginated list of notifications, optionally filtered by status and priority.
+//	@Tags			notifications
+//	@Produce		json
+//	@Param			page		query		int		false	"Page number"			default(1)
+//	@Param			page_size	query		int		false	"Items per page"		default(20)
+//	@Param			status		query		string	false	"Filter by status"		Enums(pending,actioned,dismissed,expired)
+//	@Param			priority	query		string	false	"Filter by priority"	Enums(urgent,high,normal,low)
+//	@Success		200			{object}	response.Response{data=pagination.Result[model.Notification]}	"Paginated list"
+//	@Failure		400			{object}	response.Response												"Invalid filter"
+//	@Failure		401			{object}	response.Response												"Unauthorized"
+//	@Failure		500			{object}	response.Response												"Internal error"
+//	@Security		BearerAuth
+//	@Router			/api/notifications [get]
 func (h *NotificationHandler) List(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -188,6 +234,19 @@ func (h *NotificationHandler) List(c *gin.Context) {
 	response.Success(c, pagination.NewResult(notifications, int64(total), page, pageSize))
 }
 
+// GetByID godoc
+//
+//	@Summary		Get a notification
+//	@Description	Retrieve a single notification by its ID.
+//	@Tags			notifications
+//	@Produce		json
+//	@Param			id	path		string	true	"Notification ID"
+//	@Success		200	{object}	response.Response{data=model.Notification}	"Notification found"
+//	@Failure		401	{object}	response.Response							"Unauthorized"
+//	@Failure		404	{object}	response.Response							"Not found"
+//	@Failure		500	{object}	response.Response							"Internal error"
+//	@Security		BearerAuth
+//	@Router			/api/notifications/{id} [get]
 func (h *NotificationHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 
@@ -209,6 +268,22 @@ type updateRequest struct {
 	ActionedValue *string                   `json:"actioned_value"`
 }
 
+// Update godoc
+//
+//	@Summary		Update notification status
+//	@Description	Update the status of a notification (e.g. mark as actioned or dismissed).
+//	@Tags			notifications
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string										true	"Notification ID"
+//	@Param			body	body		updateRequest								true	"Status update"
+//	@Success		200		{object}	response.Response{data=model.Notification}	"Updated notification"
+//	@Failure		400		{object}	response.Response							"Validation error"
+//	@Failure		401		{object}	response.Response							"Unauthorized"
+//	@Failure		404		{object}	response.Response							"Not found"
+//	@Failure		500		{object}	response.Response							"Internal error"
+//	@Security		BearerAuth
+//	@Router			/api/notifications/{id} [patch]
 func (h *NotificationHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	ctx := c.Request.Context()
@@ -243,17 +318,10 @@ func (h *NotificationHandler) Update(c *gin.Context) {
 
 	// Sync badge across all iOS devices when pending count changes.
 	// Any status change away from "pending" reduces the count.
-	// Same detached-ctx pattern as Create: survive client disconnect,
-	// own timeout, no request-lifecycle coupling.
 	if *req.Status == model.StatusDismissed || *req.Status == model.StatusActioned || *req.Status == model.StatusExpired {
-		reqCtx := context.WithoutCancel(ctx)
-		go func() {
-			bgCtx, cancel := context.WithTimeout(reqCtx, 30*time.Second)
-			defer cancel()
-			pending := model.StatusPending
-			newCount, _ := h.store.Count(bgCtx, &pending, nil)
-			h.pushRouter.UpdateBadge(bgCtx, newCount)
-		}()
+		h.detachedPush(ctx, func(ctx context.Context, count int) {
+			h.pushRouter.UpdateBadge(ctx, count)
+		})
 	}
 
 	if *req.Status == model.StatusActioned && updated.CallbackURL != nil && req.ActionedValue != nil {
@@ -266,6 +334,19 @@ func (h *NotificationHandler) Update(c *gin.Context) {
 	response.Success(c, updated)
 }
 
+// Delete godoc
+//
+//	@Summary		Delete a notification
+//	@Description	Permanently remove a notification by its ID.
+//	@Tags			notifications
+//	@Produce		json
+//	@Param			id	path	string	true	"Notification ID"
+//	@Success		204	"No content"
+//	@Failure		401	{object}	response.Response	"Unauthorized"
+//	@Failure		404	{object}	response.Response	"Not found"
+//	@Failure		500	{object}	response.Response	"Internal error"
+//	@Security		BearerAuth
+//	@Router			/api/notifications/{id} [delete]
 func (h *NotificationHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 

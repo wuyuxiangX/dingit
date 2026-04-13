@@ -12,11 +12,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
 
 	"github.com/dingit-me/server/internal/buildinfo"
 	"github.com/dingit-me/server/internal/config"
 	"github.com/dingit-me/server/internal/db"
+	"github.com/dingit-me/server/internal/docs"
 	"github.com/dingit-me/server/internal/handler"
 	"github.com/dingit-me/server/internal/metrics"
 	"github.com/dingit-me/server/internal/middleware"
@@ -25,6 +28,18 @@ import (
 	"github.com/dingit-me/server/internal/service"
 	"github.com/dingit-me/server/internal/ws"
 )
+
+//	@title						DingIt API
+//	@version					1.2
+//	@description				Interactive notification system — push, poll, and act on notifications in real time.
+//	@BasePath					/
+//	@securityDefinitions.apikey	BearerAuth
+//	@in							header
+//	@name						Authorization
+//	@description				API key prefixed with "Bearer "
+//
+// @host is intentionally omitted so swagger-ui uses the current page host.
+// Override at runtime via SWAGGER_HOST env var if you need a fixed value.
 
 func main() {
 	// CLI flags
@@ -284,6 +299,22 @@ func main() {
 	// DB query with no throttle. Limits are generous so legitimate
 	// clients never notice (50 rps burst 100 per IP).
 	r.Use(middleware.IPRateLimit(50, 100))
+
+	// Swagger UI — opt-in via SWAGGER_ENABLED=true, always on outside
+	// production. The spec documents auth per endpoint, but we still
+	// default-deny in prod because publishing a complete endpoint
+	// catalogue is an attack-surface hint we don't need to give away.
+	// SWAGGER_HOST lets ops pin the host field so "Try it out" works
+	// behind a reverse proxy; empty means swagger-ui uses the current
+	// page host.
+	swaggerEnabled := os.Getenv("SWAGGER_ENABLED") == "true" || !cfg.IsProduction()
+	if swaggerEnabled {
+		if host := os.Getenv("SWAGGER_HOST"); host != "" {
+			docs.SwaggerInfo.Host = host
+		}
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+		logger.Info("Swagger UI enabled", zap.String("path", "/swagger/index.html"))
+	}
 
 	// API Key auth middleware. Only /health is exempt — /ws now requires
 	// the same API key as the REST API, either via Authorization header,

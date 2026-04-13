@@ -46,6 +46,12 @@ jobs:
 
       - run: go build -o /dev/null .
 
+      - name: Check swagger docs are up to date
+        run: |
+          go install github.com/swaggo/swag/cmd/swag@v1.16.6
+          swag init --output internal/docs --parseDependency --parseInternal
+          git diff --exit-code internal/docs/ || (echo "Swagger docs are out of date. Run 'make swagger' and commit." && exit 1)
+
       - run: go test ./... -v
         if: hashFiles('apps/server/**/*_test.go') != ''
 

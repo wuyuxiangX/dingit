@@ -1,4 +1,4 @@
 {
   "title": "Getting Started",
-  "pages": ["installation", "first-notification", "concepts"]
+  "pages": ["installation", "first-notification", "sdk-examples", "concepts"]
 }

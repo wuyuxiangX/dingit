@@ -35,6 +35,20 @@ var apnsTokenRE = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
 // token format is undocumented and changes over time.
 var fcmTokenRE = regexp.MustCompile(`^[A-Za-z0-9_\-:.]{100,300}$`)
 
+// Register godoc
+//
+//	@Summary		Register a device
+//	@Description	Register a device token for push notifications (APNs or FCM).
+//	@Tags			devices
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		registerDeviceRequest	true	"Device token and platform"
+//	@Success		200		{object}	response.Response		"Registered device"
+//	@Failure		400		{object}	response.Response		"Invalid token or platform"
+//	@Failure		401		{object}	response.Response		"Unauthorized"
+//	@Failure		500		{object}	response.Response		"Internal error"
+//	@Security		BearerAuth
+//	@Router			/api/devices [post]
 func (h *DeviceHandler) Register(c *gin.Context) {
 	var req registerDeviceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

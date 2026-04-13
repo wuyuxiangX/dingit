@@ -1,4 +1,4 @@
 {
   "title": "入门",
-  "pages": ["installation", "first-notification", "concepts"]
+  "pages": ["installation", "first-notification", "sdk-examples", "concepts"]
 }

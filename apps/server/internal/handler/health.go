@@ -79,10 +79,19 @@ func NewHealthHandler(
 	}
 }
 
-// Health is the public, unauthenticated health probe. It deliberately
-// returns only `status` so unauthenticated callers can't enumerate
-// operational signals like connection counts or pending queue depth.
-// The richer view now lives on HealthDebug, which is authenticated.
+// healthStatus is the response payload for the public health endpoint.
+type healthStatus struct {
+	Status string `json:"status" example:"ok"`
+}
+
+// Health godoc
+//
+//	@Summary		Health check
+//	@Description	Public, unauthenticated liveness probe. Returns "ok" or "degraded".
+//	@Tags			health
+//	@Produce		json
+//	@Success		200	{object}	response.Response{data=healthStatus}	"Server health"
+//	@Router			/health [get]
 func (h *HealthHandler) Health(c *gin.Context) {
 	pending := model.StatusPending
 	_, err := h.store.Count(c.Request.Context(), &pending, nil)
@@ -95,27 +104,16 @@ func (h *HealthHandler) Health(c *gin.Context) {
 	response.Success(c, gin.H{"status": status})
 }
 
-// HealthDebug returns the verbose operational view. Must be mounted
-// inside the authenticated route group so only API-key-holding
-// callers can read it.
+// HealthDebug godoc
 //
-// Shape (all fields always present; nil deps render as safe zero
-// values rather than being omitted, so dashboards and scripts can
-// rely on a stable schema):
-//
-//	{
-//	  "status":                "ok",
-//	  "uptime_seconds":        123,
-//	  "connected_clients":     1,
-//	  "pending_notifications": 0,
-//	  "db_ping_ms":            3,
-//	  "push_providers": {
-//	    "apns": { "enabled": true,  "last_success_at": "...", "last_error_at": "...", "last_error": "..." },
-//	    "fcm":  { "enabled": false }
-//	  },
-//	  "callback_queue": { "in_flight": 0, "pending": 0 },
-//	  "build_info":     { "version": "v1.1.0", "commit_sha": "abc1234", "built_at": "..." }
-//	}
+//	@Summary		Debug health (verbose)
+//	@Description	Authenticated verbose health view with DB ping, push provider status, callback queue depth, WebSocket client count, and build metadata.
+//	@Tags			health
+//	@Produce		json
+//	@Success		200	{object}	response.Response	"Verbose health"
+//	@Failure		401	{object}	response.Response	"Unauthorized"
+//	@Security		BearerAuth
+//	@Router			/api/health/debug [get]
 func (h *HealthHandler) HealthDebug(c *gin.Context) {
 	ctx := c.Request.Context()
 

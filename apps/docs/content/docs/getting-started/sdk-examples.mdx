@@ -1,0 +1,149 @@
+---
+title: Send from code
+description: Copy-paste examples for curl, Python, and Node.js — no SDK install needed.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Send notifications to Dingit from any language that speaks HTTP. These
+examples cover the most common patterns; for the full API spec, see
+[Swagger UI](http://localhost:8080/swagger/index.html) on your server.
+
+<Callout type="info">
+Set two environment variables before running any example:
+
+```bash
+export DINGIT_URL="http://localhost:8080"
+export DINGIT_API_KEY="your-api-key"
+```
+</Callout>
+
+## curl
+
+```bash title="Simple notification"
+curl -X POST "$DINGIT_URL/api/notifications" \
+  -H "Authorization: Bearer $DINGIT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Deploy complete",
+    "body": "v1.2.0 is live on production",
+    "source": "ci",
+    "priority": "high"
+  }'
+```
+
+```bash title="With actions and callback"
+curl -X POST "$DINGIT_URL/api/notifications" \
+  -H "Authorization: Bearer $DINGIT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "PR #42 ready for review",
+    "body": "feat: add user settings page",
+    "source": "github",
+    "actions": [
+      { "label": "Approve", "value": "approve" },
+      { "label": "View Diff", "value": "view_diff" }
+    ],
+    "callback_url": "https://ci.example.com/webhook"
+  }'
+```
+
+## Python
+
+```python title="send_notification.py"
+import os
+import requests
+
+url = os.environ["DINGIT_URL"]
+key = os.environ["DINGIT_API_KEY"]
+
+resp = requests.post(
+    f"{url}/api/notifications",
+    headers={"Authorization": f"Bearer {key}"},
+    json={
+        "title": "Deploy complete",
+        "body": "v1.2.0 is live on production",
+        "source": "ci",
+        "priority": "high",
+        "actions": [
+            {"label": "View Logs", "value": "view_logs"},
+            {"label": "Rollback", "value": "rollback"},
+        ],
+    },
+)
+resp.raise_for_status()
+data = resp.json()
+print(f"Sent: {data['data']['id']}")
+```
+
+Only depends on `requests` (`pip install requests`). For one-off scripts,
+the stdlib `urllib.request` works too — just swap in `json.dumps()` and
+manual header handling.
+
+## Node.js
+
+```javascript title="sendNotification.mjs"
+const url = process.env.DINGIT_URL;
+const key = process.env.DINGIT_API_KEY;
+
+const resp = await fetch(`${url}/api/notifications`, {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${key}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    title: "Deploy complete",
+    body: "v1.2.0 is live on production",
+    source: "ci",
+    priority: "high",
+    actions: [
+      { label: "View Logs", value: "view_logs" },
+      { label: "Rollback", value: "rollback" },
+    ],
+  }),
+});
+
+if (!resp.ok) {
+  throw new Error(`${resp.status}: ${await resp.text()}`);
+}
+
+const { data } = await resp.json();
+console.log(`Sent: ${data.id}`);
+```
+
+Uses the built-in `fetch` API (Node 18+). No dependencies needed.
+
+## Response format
+
+All examples return the same JSON envelope:
+
+```json
+{
+  "code": 0,
+  "message": "created",
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "pending",
+    "timestamp": "2026-04-12T10:30:00Z"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | `int` | `0` on success, non-zero on error |
+| `message` | `string` | Human-readable status |
+| `data.id` | `string` | UUID of the created notification |
+| `data.status` | `string` | Always `pending` on creation |
+
+## Error handling
+
+Check for non-2xx status codes. Common errors:
+
+| Status | Cause | Fix |
+|--------|-------|-----|
+| 400 | Missing `title` or `body` | Check required fields |
+| 401 | Bad or missing API key | Verify `DINGIT_API_KEY` |
+| 429 | Rate limited | Back off and retry |
+| 500 | Server error | Check server logs |
