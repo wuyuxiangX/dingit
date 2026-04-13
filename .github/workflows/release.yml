@@ -5,9 +5,75 @@ on:
     tags: ['v*']
 
 jobs:
+  # ── Single source of truth for build metadata. Both downstream jobs
+  # depend on this so the CLI tarballs and the server image carry the
+  # exact same COMMIT_SHA and BUILT_AT. Without this, each job would
+  # call `date -u` on its own runner and the timestamps would drift by
+  # seconds to minutes for the same tag — confusing for ops triage.
+  build-meta:
+    name: Build metadata
+    runs-on: ubuntu-latest
+    outputs:
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+      built_at: ${{ steps.meta.outputs.built_at }}
+    steps:
+      - id: meta
+        run: |
+          echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+  # ── CLI binary cross-compilation + GitHub Release (WYX-412) ──────────────
+  cli-release:
+    name: CLI Binaries + GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-meta
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/cli/go.mod
+
+      - name: Cross-compile CLI for 4 targets
+        env:
+          VERSION: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ needs.build-meta.outputs.short_sha }}
+          BUILT_AT: ${{ needs.build-meta.outputs.built_at }}
+        run: |
+          LDFLAGS="-s -w \
+            -X github.com/dingit-me/cli/internal/buildinfo.Version=${VERSION} \
+            -X github.com/dingit-me/cli/internal/buildinfo.CommitSHA=${COMMIT_SHA} \
+            -X github.com/dingit-me/cli/internal/buildinfo.BuiltAt=${BUILT_AT}"
+
+          cd apps/cli
+          for pair in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            GOOS="${pair%/*}"
+            GOARCH="${pair#*/}"
+            echo "Building dingit-${GOOS}-${GOARCH}..."
+            CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+              go build -ldflags "$LDFLAGS" -o dingit .
+            tar czf "../../dingit-${GOOS}-${GOARCH}.tar.gz" dingit
+            rm dingit
+          done
+
+      - name: Generate SHA256SUMS
+        run: sha256sum dingit-*.tar.gz > SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dingit-*.tar.gz
+            SHA256SUMS
+          generate_release_notes: true
+
+  # ── Docker image for the server ──────────────────────────────────────────
   docker:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
+    needs: build-meta
     permissions:
       contents: read
       packages: write
@@ -33,16 +99,6 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
 
-      # Derive a short commit SHA and RFC 3339 timestamp for -ldflags
-      # injection. github.sha is the full 40-char hash; cut it to 7 to
-      # match `git rev-parse --short HEAD` used by the Makefile, so the
-      # build_info field reads identically no matter which build path
-      # produced the binary.
-      - id: build-meta
-        run: |
-          echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-          echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-
       - uses: docker/build-push-action@v6
         with:
           context: ./apps/server
@@ -52,10 +108,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           # WYX-411: inject build metadata into the Go binary at link
           # time. Must stay in sync with Makefile's BUILD_LDFLAGS_SERVER
-          # and apps/server/Dockerfile's ARG list.
+          # and apps/server/Dockerfile's ARG list. SHA and timestamp come
+          # from the build-meta job so CLI and server share them.
           build-args: |
             VERSION=${{ github.ref_name }}
-            COMMIT_SHA=${{ steps.build-meta.outputs.short_sha }}
-            BUILT_AT=${{ steps.build-meta.outputs.built_at }}
+            COMMIT_SHA=${{ needs.build-meta.outputs.short_sha }}
+            BUILT_AT=${{ needs.build-meta.outputs.built_at }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
