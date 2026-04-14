@@ -16,6 +16,7 @@ import '../../../../app/theme/theme_context_ext.dart';
 import '../../../../app/theme/theme_mode_provider.dart';
 import '../../../../core/push/badge_service.dart';
 import '../../../../core/ui/undo_pill.dart';
+import '../../../../core/websocket/ws_client.dart';
 import '../../../../l10n/gen/app_localizations.dart';
 import '../../../notifications/providers/history_provider.dart';
 import '../../../notifications/providers/notifications_provider.dart';
@@ -39,6 +40,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   late final TextEditingController _apiKeyController;
   bool _obscureApiKey = true;
   bool _isTesting = false;
+  bool _isSaving = false;
   _TestResult? _testResult;
   String _appVersion = '';
 
@@ -151,27 +153,48 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   /// the top-right action saves and closes instead of having a dedicated
   /// Save button at the bottom of the form.
   Future<void> _saveAndClose() async {
+    if (_isSaving) return;
     final serverUrl = _serverUrlController.text.trim();
     final apiKey = _apiKeyController.text.trim();
 
+    setState(() => _isSaving = true);
     try {
       await ref.read(settingsProvider.notifier).saveAll(
             serverUrl: serverUrl,
             apiKey: apiKey,
           );
 
-      // Kick the WebSocket reconnect off in the background instead of
-      // awaiting it. WsClient.connect() awaits `_channel.ready` with a
-      // 5s timeout, so awaiting reconnectWithUrl here used to make the
-      // Done button feel "stuck" for up to 5 seconds when the new
-      // server URL was unreachable. The reconnect still runs — it just
-      // doesn't block navigation. The notifications page's connection
-      // chip already surfaces the live ws state, so the user gets
-      // feedback there if the new URL doesn't come up.
+      // Wait until the new WsClient (rebuilt by Riverpod when settings
+      // changed) finishes its auto-connect handshake before popping, so
+      // the notifications page doesn't see a disconnected→connecting→
+      // connected flicker the instant we return. Do NOT call
+      // reconnectWithUrl here: that would race against the auto-connect
+      // already in flight and the two competing connect() calls cancel
+      // each other's channel, producing the very flicker we're trying
+      // to fix. 2s is enough for a healthy LAN handshake — if it takes
+      // longer, the URL is almost certainly bad and the user is better
+      // served by a clear error than by being silently bounced back to
+      // a red banner on the notifications page.
       final wsClient = ref.read(wsClientProvider);
-      final settings = ref.read(settingsProvider);
-      unawaited(wsClient.reconnectWithUrl(settings.wsUrl,
-          newApiKey: settings.apiKey));
+      try {
+        await _awaitConnected(wsClient.connectionState)
+            .timeout(const Duration(seconds: 2));
+      } on TimeoutException {
+        // Connection didn't come up in time. Keep the user on this
+        // page so they can fix the URL/key — popping back to a red
+        // banner is technically correct but feels like the save just
+        // hung for no reason.
+        if (mounted) {
+          showUndoPill(
+            context,
+            message: context.l10n.settingsServerUnreachable,
+            icon: LucideIcons.alertCircle,
+            iconColor: const Color(0xFFFF6961),
+            duration: const Duration(seconds: 3),
+          );
+        }
+        return;
+      }
 
       if (mounted) context.pop();
     } catch (e) {
@@ -187,7 +210,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           duration: const Duration(seconds: 3),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  /// Resolve when the WebSocket connection state transitions to
+  /// `connected`. If it is already connected, resolves immediately.
+  /// Caller is expected to wrap in a `.timeout(...)` for the unreachable
+  /// case — this future has no internal deadline.
+  Future<void> _awaitConnected(
+    ValueNotifier<WsConnectionState> state,
+  ) {
+    if (state.value == WsConnectionState.connected) {
+      return Future.value();
+    }
+    final completer = Completer<void>();
+    void listener() {
+      if (state.value == WsConnectionState.connected &&
+          !completer.isCompleted) {
+        state.removeListener(listener);
+        completer.complete();
+      }
+    }
+    state.addListener(listener);
+    return completer.future;
   }
 
   Future<void> _clearHistory() async {
@@ -325,7 +372,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         centerTitle: true,
         actions: [
           TextButton(
-            onPressed: _saveAndClose,
+            onPressed: _isSaving ? null : _saveAndClose,
             style: TextButton.styleFrom(
               foregroundColor: colors.primary,
               textStyle: GoogleFonts.plusJakartaSans(
@@ -333,7 +380,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            child: Text(l10n.settingsDone),
+            child: _isSaving
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(colors.primary),
+                    ),
+                  )
+                : Text(l10n.settingsDone),
           ),
         ],
       ),

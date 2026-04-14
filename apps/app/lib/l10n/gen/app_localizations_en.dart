@@ -96,6 +96,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsServerFailed => 'Failed';
 
   @override
+  String get settingsServerUnreachable =>
+      'Cannot reach this server. Check the URL and API key.';
+
+  @override
   String get settingsSectionAuth => 'AUTHENTICATION';
 
   @override

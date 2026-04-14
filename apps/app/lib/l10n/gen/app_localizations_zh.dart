@@ -96,6 +96,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsServerFailed => '失败';
 
   @override
+  String get settingsServerUnreachable => '无法连接到该服务器，请检查地址和密钥';
+
+  @override
   String get settingsSectionAuth => '认证';
 
   @override

@@ -38,6 +38,7 @@
   "settingsServerTesting": "测试中…",
   "settingsServerConnected": "已连接",
   "settingsServerFailed": "失败",
+  "settingsServerUnreachable": "无法连接到该服务器，请检查地址和密钥",
 
   "settingsSectionAuth": "认证",
   "settingsAuthApiKey": "API Key",

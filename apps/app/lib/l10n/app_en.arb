@@ -50,6 +50,7 @@
   "settingsServerTesting": "Testing…",
   "settingsServerConnected": "Connected",
   "settingsServerFailed": "Failed",
+  "settingsServerUnreachable": "Cannot reach this server. Check the URL and API key.",
 
   "settingsSectionAuth": "AUTHENTICATION",
   "settingsAuthApiKey": "API Key",

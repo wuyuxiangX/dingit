@@ -272,6 +272,12 @@ abstract class AppLocalizations {
   /// **'Failed'**
   String get settingsServerFailed;
 
+  /// No description provided for @settingsServerUnreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot reach this server. Check the URL and API key.'**
+  String get settingsServerUnreachable;
+
   /// No description provided for @settingsSectionAuth.
   ///
   /// In en, this message translates to:
