@@ -23,7 +23,6 @@ class NotificationPage extends ConsumerStatefulWidget {
 }
 
 class _NotificationPageState extends ConsumerState<NotificationPage> {
-  bool _pushInitialized = false;
   StreamSubscription<String>? _errorSub;
 
   @override
@@ -60,8 +59,17 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
       });
 
       ref.listenManual(settingsProvider, (prev, next) {
-        if (!_pushInitialized && next.isLoaded && next.serverUrl.isNotEmpty) {
-          _pushInitialized = true;
+        if (!next.isLoaded || next.serverUrl.isEmpty) return;
+        // Re-init when the user changes server URL or API key, so the
+        // APNs device token gets re-registered against the new server.
+        // Without this, the App keeps its push token registered on the
+        // old server and lock-screen pushes silently stop working.
+        // pushServiceProvider depends on apiClientProvider which in turn
+        // depends on settingsProvider, so a fresh service instance with
+        // a fresh ApiClient is already in place by the time we read it.
+        final urlChanged = prev?.serverUrl != next.serverUrl;
+        final keyChanged = prev?.apiKey != next.apiKey;
+        if (urlChanged || keyChanged) {
           ref.read(pushServiceProvider).initialize();
         }
       }, fireImmediately: true);
