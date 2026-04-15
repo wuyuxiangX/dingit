@@ -558,6 +558,16 @@
                 "token"
             ],
             "properties": {
+                "dnd_enabled": {
+                    "description": "Do Not Disturb window — see WYX-420. All three fields are optional;\nif `dnd_enabled` is false or either bound is missing, the server\ntreats the device as always-deliverable. Times are wall-clock HH:MM\nin the user's local timezone (e.g. \"22:00\"); the server compares\nthem against `time.Now()` on the host the server runs on. We do not\nstore the user's timezone today — if you self-host on a server in\na different region than your phone, set the host TZ accordingly.",
+                    "type": "boolean"
+                },
+                "dnd_end": {
+                    "type": "string"
+                },
+                "dnd_start": {
+                    "type": "string"
+                },
                 "platform": {
                     "type": "string"
                 },

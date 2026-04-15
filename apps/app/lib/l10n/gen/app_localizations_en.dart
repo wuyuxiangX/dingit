@@ -100,6 +100,36 @@ class AppLocalizationsEn extends AppLocalizations {
       'Cannot reach this server. Check the URL and API key.';
 
   @override
+  String get settingsSectionDnd => 'DO NOT DISTURB';
+
+  @override
+  String get settingsDndEnabled => 'Enable Do Not Disturb';
+
+  @override
+  String get settingsDndEnabledHint =>
+      'Pushes during this window arrive silently — banner and badge still update, but no sound or vibration.';
+
+  @override
+  String get settingsDndStart => 'Start';
+
+  @override
+  String get settingsDndEnd => 'End';
+
+  @override
+  String settingsDndHintOvernight(String start, String end, int hours) {
+    return 'Every night from $start to $end next day · ${hours}h';
+  }
+
+  @override
+  String settingsDndHintSameDay(String start, String end, int hours) {
+    return 'Every day from $start to $end · ${hours}h';
+  }
+
+  @override
+  String get settingsDndHintInvalid =>
+      'Start and end are identical — window inactive';
+
+  @override
   String get settingsSectionAuth => 'AUTHENTICATION';
 
   @override

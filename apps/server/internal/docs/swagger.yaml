@@ -49,6 +49,20 @@ definitions:
     type: object
   handler.registerDeviceRequest:
     properties:
+      dnd_enabled:
+        description: |-
+          Do Not Disturb window — see WYX-420. All three fields are optional;
+          if `dnd_enabled` is false or either bound is missing, the server
+          treats the device as always-deliverable. Times are wall-clock HH:MM
+          in the user's local timezone (e.g. "22:00"); the server compares
+          them against `time.Now()` on the host the server runs on. We do not
+          store the user's timezone today — if you self-host on a server in
+          a different region than your phone, set the host TZ accordingly.
+        type: boolean
+      dnd_end:
+        type: string
+      dnd_start:
+        type: string
       platform:
         type: string
       token:

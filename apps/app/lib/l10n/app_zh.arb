@@ -40,6 +40,29 @@
   "settingsServerFailed": "失败",
   "settingsServerUnreachable": "无法连接到该服务器，请检查地址和密钥",
 
+  "settingsSectionDnd": "免打扰",
+  "settingsDndEnabled": "启用免打扰",
+  "settingsDndEnabledHint": "时段内推送静默到达：横幅与角标正常更新，但不响铃、不震动",
+  "settingsDndStart": "开始时间",
+  "settingsDndEnd": "结束时间",
+  "settingsDndHintOvernight": "每晚 {start} 开始，次日 {end} 结束 · 共 {hours} 小时",
+  "@settingsDndHintOvernight": {
+    "placeholders": {
+      "start": {"type": "String"},
+      "end": {"type": "String"},
+      "hours": {"type": "int"}
+    }
+  },
+  "settingsDndHintSameDay": "每天 {start} 到 {end} · 共 {hours} 小时",
+  "@settingsDndHintSameDay": {
+    "placeholders": {
+      "start": {"type": "String"},
+      "end": {"type": "String"},
+      "hours": {"type": "int"}
+    }
+  },
+  "settingsDndHintInvalid": "开始和结束时间相同，窗口无效",
+
   "settingsSectionAuth": "认证",
   "settingsAuthApiKey": "API Key",
   "settingsAuthApiKeyPlaceholder": "输入 API Key",

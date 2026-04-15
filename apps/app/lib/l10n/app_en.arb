@@ -52,6 +52,29 @@
   "settingsServerFailed": "Failed",
   "settingsServerUnreachable": "Cannot reach this server. Check the URL and API key.",
 
+  "settingsSectionDnd": "DO NOT DISTURB",
+  "settingsDndEnabled": "Enable Do Not Disturb",
+  "settingsDndEnabledHint": "Pushes during this window arrive silently — banner and badge still update, but no sound or vibration.",
+  "settingsDndStart": "Start",
+  "settingsDndEnd": "End",
+  "settingsDndHintOvernight": "Every night from {start} to {end} next day · {hours}h",
+  "@settingsDndHintOvernight": {
+    "placeholders": {
+      "start": {"type": "String"},
+      "end": {"type": "String"},
+      "hours": {"type": "int"}
+    }
+  },
+  "settingsDndHintSameDay": "Every day from {start} to {end} · {hours}h",
+  "@settingsDndHintSameDay": {
+    "placeholders": {
+      "start": {"type": "String"},
+      "end": {"type": "String"},
+      "hours": {"type": "int"}
+    }
+  },
+  "settingsDndHintInvalid": "Start and end are identical — window inactive",
+
   "settingsSectionAuth": "AUTHENTICATION",
   "settingsAuthApiKey": "API Key",
   "settingsAuthApiKeyPlaceholder": "Enter your API key",

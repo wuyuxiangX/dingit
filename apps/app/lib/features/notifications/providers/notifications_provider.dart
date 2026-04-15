@@ -44,9 +44,12 @@ final connectionStateProvider = Provider<ValueNotifier<WsConnectionState>>((ref)
   return ref.watch(wsClientProvider).connectionState;
 });
 
+/// Stable across settings changes: the service instance caches the APNs
+/// device token between registrations, so it must not be rebuilt when
+/// serverUrl / apiKey / DND state change. Reads settings + api via
+/// `ref.read` at each call site instead.
 final pushServiceProvider = Provider<PushNotificationService>((ref) {
-  final api = ref.watch(apiClientProvider);
-  return PushNotificationService(api);
+  return PushNotificationService(ref);
 });
 
 final notificationsProvider =

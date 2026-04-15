@@ -99,6 +99,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsServerUnreachable => '无法连接到该服务器，请检查地址和密钥';
 
   @override
+  String get settingsSectionDnd => '免打扰';
+
+  @override
+  String get settingsDndEnabled => '启用免打扰';
+
+  @override
+  String get settingsDndEnabledHint => '时段内推送静默到达：横幅与角标正常更新，但不响铃、不震动';
+
+  @override
+  String get settingsDndStart => '开始时间';
+
+  @override
+  String get settingsDndEnd => '结束时间';
+
+  @override
+  String settingsDndHintOvernight(String start, String end, int hours) {
+    return '每晚 $start 开始，次日 $end 结束 · 共 $hours 小时';
+  }
+
+  @override
+  String settingsDndHintSameDay(String start, String end, int hours) {
+    return '每天 $start 到 $end · 共 $hours 小时';
+  }
+
+  @override
+  String get settingsDndHintInvalid => '开始和结束时间相同，窗口无效';
+
+  @override
   String get settingsSectionAuth => '认证';
 
   @override

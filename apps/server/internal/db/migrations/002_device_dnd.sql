@@ -1,0 +1,11 @@
+-- +goose Up
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS dnd_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS dnd_start_minute SMALLINT;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS dnd_end_minute SMALLINT;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS dnd_tz_offset_minutes SMALLINT NOT NULL DEFAULT 0;
+
+-- +goose Down
+ALTER TABLE devices DROP COLUMN IF EXISTS dnd_tz_offset_minutes;
+ALTER TABLE devices DROP COLUMN IF EXISTS dnd_end_minute;
+ALTER TABLE devices DROP COLUMN IF EXISTS dnd_start_minute;
+ALTER TABLE devices DROP COLUMN IF EXISTS dnd_enabled;

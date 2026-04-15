@@ -350,6 +350,7 @@ func main() {
 		api.PATCH("/notifications/:id", notificationHandler.Update)
 		api.DELETE("/notifications/:id", notificationHandler.Delete)
 		api.POST("/devices", deviceHandler.Register)
+		api.POST("/devices/unregister", deviceHandler.Unregister)
 		// Verbose health view is authenticated so unauthenticated
 		// clients can't enumerate connection counts or queue depth.
 		api.GET("/health/debug", healthHandler.HealthDebug)

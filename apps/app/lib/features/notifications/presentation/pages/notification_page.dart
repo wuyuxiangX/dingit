@@ -60,17 +60,23 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
 
       ref.listenManual(settingsProvider, (prev, next) {
         if (!next.isLoaded || next.serverUrl.isEmpty) return;
-        // Re-init when the user changes server URL or API key, so the
-        // APNs device token gets re-registered against the new server.
-        // Without this, the App keeps its push token registered on the
-        // old server and lock-screen pushes silently stop working.
-        // pushServiceProvider depends on apiClientProvider which in turn
-        // depends on settingsProvider, so a fresh service instance with
-        // a fresh ApiClient is already in place by the time we read it.
-        final urlChanged = prev?.serverUrl != next.serverUrl;
-        final keyChanged = prev?.apiKey != next.apiKey;
-        if (urlChanged || keyChanged) {
-          ref.read(pushServiceProvider).initialize();
+        final pushService = ref.read(pushServiceProvider);
+        // First run: no prior settings and no cached token — run the
+        // full initialize() (permission, token fetch, register).
+        if (prev == null) {
+          pushService.initialize();
+          return;
+        }
+        final changed = prev.serverUrl != next.serverUrl ||
+            prev.apiKey != next.apiKey ||
+            prev.dndEnabled != next.dndEnabled ||
+            prev.dndStart != next.dndStart ||
+            prev.dndEnd != next.dndEnd;
+        if (changed) {
+          // Re-register against the (possibly new) server with the
+          // latest DND window. Uses the cached token when available so
+          // we skip Firebase permission + token fetch on every save.
+          pushService.updateRegistration();
         }
       }, fireImmediately: true);
     });

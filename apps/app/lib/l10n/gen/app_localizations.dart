@@ -278,6 +278,54 @@ abstract class AppLocalizations {
   /// **'Cannot reach this server. Check the URL and API key.'**
   String get settingsServerUnreachable;
 
+  /// No description provided for @settingsSectionDnd.
+  ///
+  /// In en, this message translates to:
+  /// **'DO NOT DISTURB'**
+  String get settingsSectionDnd;
+
+  /// No description provided for @settingsDndEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable Do Not Disturb'**
+  String get settingsDndEnabled;
+
+  /// No description provided for @settingsDndEnabledHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pushes during this window arrive silently — banner and badge still update, but no sound or vibration.'**
+  String get settingsDndEnabledHint;
+
+  /// No description provided for @settingsDndStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get settingsDndStart;
+
+  /// No description provided for @settingsDndEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'End'**
+  String get settingsDndEnd;
+
+  /// No description provided for @settingsDndHintOvernight.
+  ///
+  /// In en, this message translates to:
+  /// **'Every night from {start} to {end} next day · {hours}h'**
+  String settingsDndHintOvernight(String start, String end, int hours);
+
+  /// No description provided for @settingsDndHintSameDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Every day from {start} to {end} · {hours}h'**
+  String settingsDndHintSameDay(String start, String end, int hours);
+
+  /// No description provided for @settingsDndHintInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Start and end are identical — window inactive'**
+  String get settingsDndHintInvalid;
+
   /// No description provided for @settingsSectionAuth.
   ///
   /// In en, this message translates to:

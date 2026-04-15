@@ -2,9 +2,12 @@ package handler
 
 import (
 	"regexp"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
+	"github.com/dingit-me/server/internal/pkg/logger"
 	"github.com/dingit-me/server/internal/pkg/response"
 	"github.com/dingit-me/server/internal/service"
 )
@@ -20,6 +23,18 @@ func NewDeviceHandler(deviceSvc *service.DeviceService) *DeviceHandler {
 type registerDeviceRequest struct {
 	Token    string `json:"token" binding:"required"`
 	Platform string `json:"platform"`
+	// DND bounds are wall-clock HH:MM in the device's local timezone.
+	// DndTzOffsetMinutes is the device's UTC offset at registration time
+	// (e.g. 480 for UTC+8) and is applied server-side before comparing
+	// time.Now() against the window.
+	DndEnabled         bool   `json:"dnd_enabled"`
+	DndStart           string `json:"dnd_start"`
+	DndEnd             string `json:"dnd_end"`
+	DndTzOffsetMinutes int    `json:"dnd_tz_offset_minutes"`
+}
+
+type unregisterDeviceRequest struct {
+	Token string `json:"token" binding:"required"`
 }
 
 var validPlatforms = map[string]bool{"ios": true, "android": true}
@@ -65,10 +80,6 @@ func (h *DeviceHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Platform-specific token format validation. Previously we only
-	// checked length (10-256 chars), which let garbage strings into
-	// the push routing table. Strict-ish regex validation stops that
-	// without being brittle to FCM token rotation.
 	switch platform {
 	case "ios":
 		if !apnsTokenRE.MatchString(req.Token) {
@@ -82,11 +93,83 @@ func (h *DeviceHandler) Register(c *gin.Context) {
 		}
 	}
 
-	device, err := h.deviceSvc.Register(c.Request.Context(), req.Token, platform)
+	dndStart, err := parseDndMinute(req.DndStart)
 	if err != nil {
+		response.BadRequest(c, response.CodeBadRequest, "invalid dnd_start, expected HH:MM")
+		return
+	}
+	dndEnd, err := parseDndMinute(req.DndEnd)
+	if err != nil {
+		response.BadRequest(c, response.CodeBadRequest, "invalid dnd_end, expected HH:MM")
+		return
+	}
+	if req.DndEnabled && (dndStart == nil || dndEnd == nil) {
+		response.BadRequest(c, response.CodeBadRequest, "dnd_start and dnd_end are required when dnd_enabled is true")
+		return
+	}
+	// Reject offsets outside the valid civilian timezone range to catch
+	// obviously-wrong clients (e.g. sending seconds instead of minutes).
+	if req.DndTzOffsetMinutes < -12*60 || req.DndTzOffsetMinutes > 14*60 {
+		response.BadRequest(c, response.CodeBadRequest, "invalid dnd_tz_offset_minutes")
+		return
+	}
+
+	device, err := h.deviceSvc.Register(c.Request.Context(), service.RegisterParams{
+		Token:              req.Token,
+		Platform:           platform,
+		DndEnabled:         req.DndEnabled,
+		DndStartMinute:     dndStart,
+		DndEndMinute:       dndEnd,
+		DndTzOffsetMinutes: req.DndTzOffsetMinutes,
+	})
+	if err != nil {
+		logger.Error("register device failed", zap.Error(err))
 		response.InternalError(c, "Failed to register device")
 		return
 	}
 
 	response.Success(c, device)
+}
+
+// Unregister godoc
+//
+//	@Summary		Unregister a device
+//	@Description	Remove a device token so the server stops pushing to it.
+//	@Tags			devices
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		unregisterDeviceRequest	true	"Device token"
+//	@Success		200		{object}	response.Response		"Unregistered"
+//	@Failure		400		{object}	response.Response		"Invalid request"
+//	@Failure		401		{object}	response.Response		"Unauthorized"
+//	@Failure		500		{object}	response.Response		"Internal error"
+//	@Security		BearerAuth
+//	@Router			/api/devices/unregister [post]
+func (h *DeviceHandler) Unregister(c *gin.Context) {
+	var req unregisterDeviceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, response.CodeBadRequest, "token is required")
+		return
+	}
+	if err := h.deviceSvc.RemoveByToken(c.Request.Context(), req.Token); err != nil {
+		logger.Error("unregister device failed", zap.Error(err))
+		response.InternalError(c, "Failed to unregister device")
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+// parseDndMinute parses an "HH:MM" wall-clock string into a minute-of-day
+// integer (0-1439). Empty input returns nil, treated as "not set" by the
+// service layer.
+func parseDndMinute(s string) (*int, error) {
+	if s == "" {
+		return nil, nil
+	}
+	t, err := time.Parse("15:04", s)
+	if err != nil {
+		return nil, err
+	}
+	m := t.Hour()*60 + t.Minute()
+	return &m, nil
 }

@@ -44,6 +44,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   _TestResult? _testResult;
   String _appVersion = '';
 
+  // Local edits to the DND window — committed via saveAll() on Done,
+  // same pattern as serverUrl/apiKey above.
+  bool _dndEnabled = false;
+  TimeOfDay _dndStart = const TimeOfDay(hour: 22, minute: 0);
+  TimeOfDay _dndEnd = const TimeOfDay(hour: 8, minute: 0);
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +60,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       final settings = ref.read(settingsProvider);
       _serverUrlController.text = settings.serverUrl;
       _apiKeyController.text = settings.apiKey;
+      setState(() {
+        _dndEnabled = settings.dndEnabled;
+        _dndStart = settings.dndStart;
+        _dndEnd = settings.dndEnd;
+      });
       if (settings.serverUrl.isNotEmpty) {
         _testConnection();
       }
@@ -162,6 +173,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       await ref.read(settingsProvider.notifier).saveAll(
             serverUrl: serverUrl,
             apiKey: apiKey,
+            dndEnabled: _dndEnabled,
+            dndStart: _dndStart,
+            dndEnd: _dndEnd,
           );
 
       // Wait until the new WsClient (rebuilt by Riverpod when settings
@@ -213,6 +227,170 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  Future<void> _pickDndTime({required bool isStart}) async {
+    final l10n = context.l10n;
+    final picked = await _showCupertinoTimeSheet(
+      initial: isStart ? _dndStart : _dndEnd,
+      other: isStart ? _dndEnd : _dndStart,
+      title: isStart ? l10n.settingsDndStart : l10n.settingsDndEnd,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (isStart) {
+        _dndStart = picked;
+      } else {
+        _dndEnd = picked;
+      }
+    });
+  }
+
+  /// iOS-style bottom action sheet hosting a [CupertinoDatePicker] in
+  /// time mode. Returns null on Cancel / scrim-tap. The Done button is
+  /// disabled while the current selection equals [other] so the user
+  /// can't commit a degenerate (start == end) window.
+  Future<TimeOfDay?> _showCupertinoTimeSheet({
+    required TimeOfDay initial,
+    required TimeOfDay other,
+    required String title,
+  }) async {
+    final l10n = context.l10n;
+    final colors = context.colors;
+    var pending = initial;
+
+    return showCupertinoModalPopup<TimeOfDay>(
+      context: context,
+      builder: (sheetCtx) {
+        final bottomSafe = MediaQuery.of(sheetCtx).padding.bottom;
+        // Wrap in a transparent Material so Text widgets inherit a real
+        // DefaultTextStyle — otherwise Cupertino modals render the
+        // "missing style" yellow double underline.
+        return Material(
+          type: MaterialType.transparency,
+          child: StatefulBuilder(
+            builder: (ctx, setSheetState) {
+              final isConflict = pending.hour == other.hour &&
+                  pending.minute == other.minute;
+              return Container(
+                height: 240 + bottomSafe,
+                decoration: BoxDecoration(
+                  color:
+                      CupertinoColors.systemBackground.resolveFrom(sheetCtx),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(18)),
+                ),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 48,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Center(
+                            child: Text(
+                              title,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: colors.onSurface,
+                              ),
+                            ),
+                          ),
+                          Positioned.fill(
+                            child: Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
+                              children: [
+                                CupertinoButton(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16),
+                                  onPressed: () =>
+                                      Navigator.of(sheetCtx).pop(),
+                                  child: Text(
+                                    l10n.commonCancel,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w400,
+                                      color: colors.primary,
+                                    ),
+                                  ),
+                                ),
+                                CupertinoButton(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16),
+                                  onPressed: isConflict
+                                      ? null
+                                      : () => Navigator.of(sheetCtx)
+                                          .pop(pending),
+                                  child: Text(
+                                    l10n.settingsDone,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: isConflict
+                                          ? colors.onSurface.withValues(
+                                              alpha: 0.35)
+                                          : colors.primary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Divider(
+                      height: 1,
+                      thickness: 0.5,
+                      color: colors.outlineVariant,
+                    ),
+                    Expanded(
+                      child: CupertinoDatePicker(
+                        mode: CupertinoDatePickerMode.time,
+                        use24hFormat: true,
+                        initialDateTime: DateTime(
+                            2024, 1, 1, initial.hour, initial.minute),
+                        onDateTimeChanged: (dt) {
+                          setSheetState(() {
+                            pending = TimeOfDay(
+                                hour: dt.hour, minute: dt.minute);
+                          });
+                        },
+                      ),
+                    ),
+                    SizedBox(height: bottomSafe),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatTimeOfDay(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  /// Human-readable summary of the current DND window — same-day,
+  /// overnight, or degenerate. Duration is rounded to whole hours.
+  String _dndSummaryText(AppLocalizations l10n) {
+    final startMin = _dndStart.hour * 60 + _dndStart.minute;
+    final endMin = _dndEnd.hour * 60 + _dndEnd.minute;
+    if (startMin == endMin) {
+      return l10n.settingsDndHintInvalid;
+    }
+    final durationMin = startMin < endMin
+        ? endMin - startMin
+        : (24 * 60 - startMin) + endMin;
+    final hours = (durationMin / 60).round();
+    final startLabel = _formatTimeOfDay(_dndStart);
+    final endLabel = _formatTimeOfDay(_dndEnd);
+    return startMin < endMin
+        ? l10n.settingsDndHintSameDay(startLabel, endLabel, hours)
+        : l10n.settingsDndHintOvernight(startLabel, endLabel, hours);
   }
 
   /// Resolve when the WebSocket connection state transitions to
@@ -302,6 +480,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ),
     );
     if (confirmed != true || !mounted) return;
+
+    // Tell the server to forget this device before we lose the API key
+    // — otherwise the row lingers with stale DND and the new user on
+    // the same device inherits the old window until first register.
+    await ref.read(pushServiceProvider).unregister();
 
     // Tear the session down. Clearing the settings state causes
     // `wsClientProvider` to rebuild and dispose the existing WsClient;
@@ -449,6 +632,68 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
               l10n.settingsAuthApiKeyHint,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                color: context.palette.inkFaint,
+                height: 1.4,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Do Not Disturb ───────────────────────────────────
+          SettingsSectionTitle(l10n.settingsSectionDnd),
+          SettingsCard(
+            children: [
+              SettingsActionTile(
+                icon: LucideIcons.moon,
+                label: l10n.settingsDndEnabled,
+                onTap: () => setState(() => _dndEnabled = !_dndEnabled),
+                // Native switch (51×31) scaled to ~0.8 so it reads as
+                // a macOS-style compact switch and fits the action-tile
+                // row height.
+                trailing: SizedBox(
+                  width: 44,
+                  height: 18,
+                  child: OverflowBox(
+                    minHeight: 0,
+                    maxHeight: double.infinity,
+                    alignment: Alignment.center,
+                    child: Transform.scale(
+                      scale: 0.8,
+                      child: Switch.adaptive(
+                        value: _dndEnabled,
+                        onChanged: (v) => setState(() => _dndEnabled = v),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (_dndEnabled) ...[
+                const SettingsTileDivider(),
+                SettingsActionTile(
+                  icon: LucideIcons.sunset,
+                  label: l10n.settingsDndStart,
+                  onTap: () => _pickDndTime(isStart: true),
+                  trailing: SettingsDisclosureValue(_formatTimeOfDay(_dndStart)),
+                ),
+                const SettingsTileDivider(),
+                SettingsActionTile(
+                  icon: LucideIcons.sunrise,
+                  label: l10n.settingsDndEnd,
+                  onTap: () => _pickDndTime(isStart: false),
+                  trailing: SettingsDisclosureValue(_formatTimeOfDay(_dndEnd)),
+                ),
+              ],
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Text(
+              _dndEnabled
+                  ? _dndSummaryText(l10n)
+                  : l10n.settingsDndEnabledHint,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 12,
                 color: context.palette.inkFaint,

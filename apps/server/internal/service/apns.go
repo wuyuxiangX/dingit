@@ -144,8 +144,12 @@ func (s *ApnsService) baseURL() string {
 // SendToAll sends push notification to all iOS devices via APNs. Each
 // device dispatch acquires the semaphore before doing any work, so the
 // total number of in-flight goroutines is bounded by apnsConcurrency.
+// The caller's cancel signal is stripped so a disconnecting client
+// doesn't kill every in-flight push mid-delivery (per-request HTTP
+// timeout still bounds each call via s.client.Timeout).
 func (s *ApnsService) SendToAll(ctx context.Context, n *model.Notification, badgeCount int) {
-	devices, err := s.deviceSvc.ListByPlatform(ctx, "ios")
+	ctx = context.WithoutCancel(ctx)
+	devices, err := s.deviceSvc.ListByPlatformFull(ctx, "ios")
 	if err != nil {
 		logger.Error("Failed to list iOS device tokens", zap.Error(err))
 		return
@@ -157,21 +161,17 @@ func (s *ApnsService) SendToAll(ctx context.Context, n *model.Notification, badg
 
 	logger.Info("Sending APNs push", zap.Int("devices", len(devices)), zap.String("title", n.Title))
 
-	for _, token := range devices {
-		token := token
+	for _, dev := range devices {
+		dev := dev
 		go func() {
-			select {
-			case s.sem <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
+			s.sem <- struct{}{}
 			defer func() { <-s.sem }()
-			s.sendToDevice(ctx, token, n, badgeCount)
+			s.sendToDevice(ctx, dev, n, badgeCount, time.Now())
 		}()
 	}
 }
 
-func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *model.Notification, badgeCount int) {
+func (s *ApnsService) sendToDevice(ctx context.Context, dev Device, n *model.Notification, badgeCount int, now time.Time) {
 	jwtToken, err := s.getJWT()
 	if err != nil {
 		logger.Error("Failed to get APNs JWT", zap.Error(err))
@@ -180,22 +180,33 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 		return
 	}
 
-	payload := map[string]any{
-		"aps": map[string]any{
-			"alert": map[string]string{
-				"title": n.Title,
-				"body":  n.Body,
-			},
-			"sound": "default",
-			"badge": badgeCount,
+	// Urgent notifications bypass DND entirely and are marked
+	// time-sensitive so they also break through iOS Focus modes. For
+	// non-urgent alerts inside DND we omit `sound` — iOS then shows a
+	// silent banner and updates the badge without ringing/vibrating.
+	urgent := n.Priority == model.PriorityUrgent
+	aps := map[string]any{
+		"alert": map[string]string{
+			"title": n.Title,
+			"body":  n.Body,
 		},
+		"badge": badgeCount,
+	}
+	if urgent || !dev.IsInDnd(now) {
+		aps["sound"] = "default"
+	}
+	if urgent {
+		aps["interruption-level"] = "time-sensitive"
+	}
+	payload := map[string]any{
+		"aps":             aps,
 		"notification_id": n.ID,
 		"source":          n.Source,
 		"priority":        string(n.Priority),
 	}
 
 	body, _ := json.Marshal(payload)
-	url := fmt.Sprintf("%s/3/device/%s", s.baseURL(), deviceToken)
+	url := fmt.Sprintf("%s/3/device/%s", s.baseURL(), dev.Token)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
@@ -220,7 +231,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 200 {
-		logger.Info("APNs push sent", zap.String("device", truncateToken(deviceToken)))
+		logger.Info("APNs push sent", zap.String("device", truncateToken(dev.Token)))
 		metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "success").Inc()
 		s.stats.recordSuccess()
 		return
@@ -233,8 +244,8 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 		// doesn't say anything about APNs health, so leave the stats
 		// tracker alone (Prometheus still records it via the
 		// "invalid_token" label).
-		logger.Info("Removing expired APNs token", zap.String("device", truncateToken(deviceToken)))
-		_ = s.deviceSvc.RemoveByToken(ctx, deviceToken)
+		logger.Info("Removing expired APNs token", zap.String("device", truncateToken(dev.Token)))
+		_ = s.deviceSvc.RemoveByToken(ctx, dev.Token)
 		metrics.PushDeliveryTotal.WithLabelValues(apnsProvider, "invalid_token").Inc()
 		return
 	}
@@ -251,6 +262,7 @@ func (s *ApnsService) sendToDevice(ctx context.Context, deviceToken string, n *m
 // on all iOS devices without showing any alert. Used when pending count changes
 // due to dismiss/action on any device.
 func (s *ApnsService) SendSilentBadgeUpdate(ctx context.Context, badgeCount int) {
+	ctx = context.WithoutCancel(ctx)
 	devices, err := s.deviceSvc.ListByPlatform(ctx, "ios")
 	if err != nil {
 		logger.Error("Failed to list iOS tokens for badge update", zap.Error(err))
@@ -265,11 +277,7 @@ func (s *ApnsService) SendSilentBadgeUpdate(ctx context.Context, badgeCount int)
 	for _, token := range devices {
 		token := token
 		go func() {
-			select {
-			case s.sem <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
+			s.sem <- struct{}{}
 			defer func() { <-s.sem }()
 			s.sendSilentBadge(ctx, token, badgeCount)
 		}()

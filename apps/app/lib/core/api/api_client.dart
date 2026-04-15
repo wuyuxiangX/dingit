@@ -101,15 +101,44 @@ class ApiClient {
     }
   }
 
-  Future<void> registerDevice({required String token, required String platform}) async {
+  Future<void> registerDevice({
+    required String token,
+    required String platform,
+    bool dndEnabled = false,
+    String dndStart = '',
+    String dndEnd = '',
+    int dndTzOffsetMinutes = 0,
+  }) async {
     final url = Uri.parse('$baseUrl/api/devices');
+    final body = <String, dynamic>{
+      'token': token,
+      'platform': platform,
+      'dnd_enabled': dndEnabled,
+      'dnd_tz_offset_minutes': dndTzOffsetMinutes,
+    };
+    if (dndEnabled) {
+      body['dnd_start'] = dndStart;
+      body['dnd_end'] = dndEnd;
+    }
     final response = await _client.post(
       url,
       headers: _headers,
-      body: jsonEncode({'token': token, 'platform': platform}),
+      body: jsonEncode(body),
     );
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw Exception('Failed to register device: ${response.statusCode}');
+    }
+  }
+
+  Future<void> unregisterDevice(String token) async {
+    final url = Uri.parse('$baseUrl/api/devices/unregister');
+    final response = await _client.post(
+      url,
+      headers: _headers,
+      body: jsonEncode({'token': token}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to unregister device: ${response.statusCode}');
     }
   }
 }
