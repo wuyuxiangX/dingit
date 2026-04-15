@@ -18,6 +18,41 @@ export DINGIT_API_KEY="your-api-key"
 ```
 </Callout>
 
+## Install as a package
+
+Don't want to hand-roll the HTTP call? The repo ships minimal send-only
+clients for Python and Node that wrap the same request:
+
+```bash title="Python"
+pip install git+https://github.com/wuyuxiangX/dingit.git#subdirectory=packages/sdk-python
+```
+
+```bash title="Node.js"
+npm install git+https://github.com/wuyuxiangX/dingit.git#main -w packages/sdk-node
+```
+
+```python title="send.py"
+from dingit import Client
+
+Client(os.environ["DINGIT_URL"], os.environ["DINGIT_API_KEY"]).send(
+    "Deploy complete",
+    body="v1.2.0 is live",
+    priority="high",
+)
+```
+
+```javascript title="send.mjs"
+import { Client } from "@dingit/client";
+
+await new Client(process.env.DINGIT_URL, process.env.DINGIT_API_KEY).send(
+  "Deploy complete",
+  { body: "v1.2.0 is live", priority: "high" },
+);
+```
+
+Prefer zero-dependency scripts? Keep reading — the raw HTTP examples
+below stay first-class.
+
 ## curl
 
 ```bash title="Simple notification"

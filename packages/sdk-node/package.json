@@ -1,0 +1,24 @@
+{
+  "name": "@dingit/client",
+  "version": "0.1.0",
+  "description": "Minimal Node.js client for Dingit notifications",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "homepage": "https://dingit.me",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wuyuxiangX/dingit.git",
+    "directory": "packages/sdk-node"
+  }
+}

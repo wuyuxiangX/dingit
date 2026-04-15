@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dingit"
+version = "0.1.0"
+description = "Minimal Python client for Dingit notifications"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Dingit" }]
+dependencies = ["requests>=2.28"]
+
+[project.urls]
+Homepage = "https://dingit.me"
+Source = "https://github.com/wuyuxiangX/dingit"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dingit*"]
