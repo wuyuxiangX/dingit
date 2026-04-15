@@ -173,27 +173,31 @@ func (s *FcmService) getAccessToken(ctx context.Context) (string, error) {
 
 // SendToAll sends push notification to all Android devices via FCM.
 // Semaphore-bounded the same way APNs is — see apns.go for rationale.
+// Detaches the caller's cancel so a disconnecting HTTP client doesn't
+// kill in-flight pushes mid-delivery (matches APNs path).
 func (s *FcmService) SendToAll(ctx context.Context, n *model.Notification) {
-	tokens, err := s.deviceSvc.ListByPlatform(ctx, "android")
+	ctx = context.WithoutCancel(ctx)
+	devices, err := s.deviceSvc.ListByPlatformFull(ctx, "android")
 	if err != nil {
 		logger.Error("Failed to list Android device tokens", zap.Error(err))
 		return
 	}
 
-	if len(tokens) == 0 {
+	if len(devices) == 0 {
 		return
 	}
 
-	for _, token := range tokens {
-		token := token
+	// Capture wall clock once so the DND check gives a consistent
+	// answer across the whole fan-out — crossing the DND boundary
+	// mid-send otherwise lets device A ring while device B goes
+	// silent for the same notification event.
+	now := time.Now()
+	for _, dev := range devices {
+		dev := dev
 		go func() {
-			select {
-			case s.sem <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
+			s.sem <- struct{}{}
 			defer func() { <-s.sem }()
-			s.sendToDevice(ctx, token, n)
+			s.sendToDevice(ctx, dev, n, now)
 		}()
 	}
 }
@@ -204,7 +208,7 @@ func (s *FcmService) Stats() PushProviderStats {
 	return s.stats.snapshot()
 }
 
-func (s *FcmService) sendToDevice(ctx context.Context, deviceToken string, n *model.Notification) {
+func (s *FcmService) sendToDevice(ctx context.Context, dev Device, n *model.Notification, now time.Time) {
 	accessToken, err := s.getAccessToken(ctx)
 	if err != nil {
 		logger.Error("Failed to get FCM access token", zap.Error(err))
@@ -213,21 +217,7 @@ func (s *FcmService) sendToDevice(ctx context.Context, deviceToken string, n *mo
 		return
 	}
 
-	msg := map[string]any{
-		"message": map[string]any{
-			"token": deviceToken,
-			"notification": map[string]string{
-				"title": n.Title,
-				"body":  n.Body,
-			},
-			"data": map[string]string{
-				"notification_id": n.ID,
-				"source":          n.Source,
-				"priority":        string(n.Priority),
-			},
-		},
-	}
-
+	msg := buildFcmPayload(dev, n, now)
 	body, _ := json.Marshal(msg)
 	url := fmt.Sprintf("https://fcm.googleapis.com/v1/projects/%s/messages:send", s.projectID)
 
@@ -257,7 +247,7 @@ func (s *FcmService) sendToDevice(ctx context.Context, deviceToken string, n *mo
 		// Prometheus counter still records it via the "invalid_token"
 		// label for drill-down.
 		logger.Info("Removing invalid FCM device token")
-		_ = s.deviceSvc.RemoveByToken(ctx, deviceToken)
+		_ = s.deviceSvc.RemoveByToken(ctx, dev.Token)
 		metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "invalid_token").Inc()
 		return
 	}
@@ -272,6 +262,54 @@ func (s *FcmService) sendToDevice(ctx context.Context, deviceToken string, n *mo
 
 	metrics.PushDeliveryTotal.WithLabelValues(fcmProvider, "success").Inc()
 	s.stats.recordSuccess()
+}
+
+// buildFcmPayload builds the FCM HTTP v1 message body for one device,
+// honoring per-device DND. Non-urgent during DND → data-only (no
+// "notification" key, Android won't auto-display). Urgent always ships
+// the full notification with android.priority=high to break through.
+//
+// Pure function so it can be unit-tested without FcmService/GCP creds.
+// Field names MUST stay camelCase — FCM v1 rejects snake_case.
+func buildFcmPayload(dev Device, n *model.Notification, now time.Time) map[string]any {
+	urgent := n.Priority == model.PriorityUrgent
+	silent := !urgent && dev.IsInDnd(now)
+
+	data := map[string]string{
+		"notification_id": n.ID,
+		"source":          n.Source,
+		"priority":        string(n.Priority),
+	}
+	if silent {
+		data["title"] = n.Title
+		data["body"] = n.Body
+	}
+
+	message := map[string]any{
+		"token": dev.Token,
+		"data":  data,
+	}
+
+	if !silent {
+		message["notification"] = map[string]string{
+			"title": n.Title,
+			"body":  n.Body,
+		}
+		androidPriority := "normal"
+		notifPriority := "PRIORITY_DEFAULT"
+		if urgent {
+			androidPriority = "high"
+			notifPriority = "PRIORITY_HIGH"
+		}
+		message["android"] = map[string]any{
+			"priority": androidPriority,
+			"notification": map[string]string{
+				"notificationPriority": notifPriority,
+			},
+		}
+	}
+
+	return map[string]any{"message": message}
 }
 
 // truncateErrBody caps error-body strings stored on the health tracker so
